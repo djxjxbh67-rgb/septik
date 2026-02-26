@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
 import httpx
 import xml.etree.ElementTree as ET
 import asyncio
@@ -6,7 +7,22 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 import re
 import html
+import json
 app = FastAPI(title="Septic Store API", description="Microservice for searching products in XML feed")
+# Allow CORS from any origin (for Make.com and widget)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+class SearchRequest(BaseModel):
+    q: Optional[str] = None
+    category_id: Optional[str] = None
+    min_price: Optional[float] = None
+    max_price: Optional[float] = None
+    users: Optional[str] = None
+    limit: int = 10
 # Global cache
 CACHE = {
     "categories": {}, # id -> {"id": str, "name": str, "parent_id": str}
@@ -162,6 +178,39 @@ async def search_products(
     results = [item[1] for item in scored_results[:limit]]
     
     return {"results": results, "total_found": len(results), "query": q}
+@app.post("/search")
+async def search_products_post(body: SearchRequest):
+    """POST version of search - accepts JSON body. Used by Make.com AI Agent."""
+    return await search_products(
+        q=body.q,
+        category_id=body.category_id,
+        min_price=body.min_price,
+        max_price=body.max_price,
+        users=body.users,
+        limit=body.limit
+    )
+@app.post("/")
+async def catch_all_post(request: Request):
+    """Catch-all POST endpoint for AI Agent flexibility.
+    Accepts any JSON with a 'q' field and searches products."""
+    try:
+        data = await request.json()
+        q = data.get("q") or data.get("query") or data.get("search") or data.get("queryParameters", {}).get("q")
+        limit = data.get("limit", 10)
+        if not q:
+            # Try to find any string value in the data
+            for v in data.values():
+                if isinstance(v, str) and len(v) > 1:
+                    q = v
+                    break
+                elif isinstance(v, dict):
+                    for vv in v.values():
+                        if isinstance(vv, str) and len(vv) > 1:
+                            q = vv
+                            break
+        return await search_products(q=q, limit=limit)
+    except Exception as e:
+        return {"error": str(e), "results": [], "total_found": 0}
 @app.get("/product/{product_id}")
 async def get_product(product_id: str):
     """Get a specific product by ID."""
