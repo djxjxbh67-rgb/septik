@@ -6,18 +6,14 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 import re
 import html
-
 app = FastAPI(title="Septic Store API", description="Microservice for searching products in XML feed")
-
 # Global cache
 CACHE = {
     "categories": {}, # id -> {"id": str, "name": str, "parent_id": str}
     "products": [],   # list of product dicts
     "last_updated": None
 }
-
 FEED_URL = "https://lenkanal.ru/bitrix/catalog_export/fid.xml"
-
 def clean_text(text: str) -> str:
     if not text:
         return ""
@@ -30,7 +26,6 @@ def clean_text(text: str) -> str:
     # Clean up whitespace
     text = re.sub(r'\s+', ' ', text).strip()
     return text
-
 async def fetch_and_parse_xml():
     print("Fetching XML...")
     async with httpx.AsyncClient() as client:
@@ -87,56 +82,86 @@ async def fetch_and_parse_xml():
             
         except Exception as e:
             print(f"Error fetching/parsing XML: {e}")
-
 @app.on_event("startup")
 async def startup_event():
     # Fetch immediately on startup
     await fetch_and_parse_xml()
     # TODO: Add background task for periodic updates if needed
-
 @app.get("/categories")
 async def get_categories():
     """Returns all categories."""
     return {"categories": list(CACHE["categories"].values())}
-
 @app.get("/search")
 async def search_products(
     q: Optional[str] = Query(None, description="Search query in name, description or brand"),
     category_id: Optional[str] = Query(None, description="Filter by category ID"),
+    min_price: Optional[float] = Query(None, description="Minimum price"),
+    max_price: Optional[float] = Query(None, description="Maximum price"),
+    users: Optional[str] = Query(None, description="Number of users/people"),
     limit: int = Query(10, description="Max results to return")
 ):
-    """Search for products."""
-    results = []
+    """Search for products. Supports word-level matching and filters."""
+    scored_results = []
     
-    q_lower = q.lower() if q else None
+    # Split query into individual words for flexible matching
+    q_words = [w.lower() for w in q.split()] if q else []
     
     for p in CACHE["products"]:
         # Filter by category
         if category_id and p["category_id"] != category_id:
             continue
+        
+        # Filter by price range
+        if min_price and p["price"] < min_price:
+            continue
+        if max_price and p["price"] > max_price:
+            continue
             
-        # Filter by query
-        if q_lower:
-            match = False
-            # Check name
-            if q_lower in p["name"].lower():
-                match = True
-            # Check brand
-            elif "Бренд" in p["params"] and q_lower in p["params"]["Бренд"].lower():
-                match = True
-            # Check description (basic)
-            elif q_lower in p["description"].lower():
-                match = True
-                
-            if not match:
+        # Filter by number of users
+        if users and p["params"].get("Количество пользователей", "") != users:
+            continue
+            
+        # Score by query words
+        if q_words:
+            score = 0
+            name_lower = p["name"].lower()
+            brand = p["params"].get("Бренд", "").lower()
+            category = p.get("category_name", "").lower()
+            all_params = " ".join(p["params"].values()).lower()
+            
+            # Build searchable text
+            searchable = f"{name_lower} {brand} {category} {all_params}"
+            
+            for word in q_words:
+                if word in name_lower:
+                    score += 10  # Name match is highest priority
+                elif word in brand:
+                    score += 8
+                elif word in category:
+                    score += 5
+                elif word in all_params:
+                    score += 3
+                elif word in p["description"].lower():
+                    score += 1
+                    
+            if score == 0:
                 continue
                 
-        results.append(p)
-        if len(results) >= limit:
-            break
-            
-    return {"results": results, "total_found": len(results)}
-
+            # Bonus for exact full query match in name
+            full_query = q.lower() if q else ""
+            if full_query in name_lower:
+                score += 20
+                
+            scored_results.append((score, p))
+        else:
+            scored_results.append((0, p))
+    
+    # Sort by relevance score (highest first)
+    scored_results.sort(key=lambda x: (-x[0], x[1]["price"]))
+    
+    results = [item[1] for item in scored_results[:limit]]
+    
+    return {"results": results, "total_found": len(results), "query": q}
 @app.get("/product/{product_id}")
 async def get_product(product_id: str):
     """Get a specific product by ID."""
@@ -144,7 +169,6 @@ async def get_product(product_id: str):
         if p["id"] == product_id:
             return p
     raise HTTPException(status_code=404, detail="Product not found")
-
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
