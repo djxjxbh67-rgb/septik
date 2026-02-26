@@ -107,16 +107,8 @@ async def startup_event():
 async def get_categories():
     """Returns all categories."""
     return {"categories": list(CACHE["categories"].values())}
-@app.get("/search")
-async def search_products(
-    q: Optional[str] = Query(None, description="Search query in name, description or brand"),
-    category_id: Optional[str] = Query(None, description="Filter by category ID"),
-    min_price: Optional[float] = Query(None, description="Minimum price"),
-    max_price: Optional[float] = Query(None, description="Maximum price"),
-    users: Optional[str] = Query(None, description="Number of users/people"),
-    limit: int = Query(10, description="Max results to return")
-):
-    """Search for products. Supports word-level matching and filters."""
+def _do_search(q=None, category_id=None, min_price=None, max_price=None, users=None, limit=10):
+    """Core search logic - plain function, no FastAPI dependencies."""
     scored_results = []
     
     # Split query into individual words for flexible matching
@@ -128,9 +120,9 @@ async def search_products(
             continue
         
         # Filter by price range
-        if min_price and p["price"] < min_price:
+        if min_price is not None and p["price"] < min_price:
             continue
-        if max_price and p["price"] > max_price:
+        if max_price is not None and p["price"] > max_price:
             continue
             
         # Filter by number of users
@@ -145,12 +137,9 @@ async def search_products(
             category = p.get("category_name", "").lower()
             all_params = " ".join(p["params"].values()).lower()
             
-            # Build searchable text
-            searchable = f"{name_lower} {brand} {category} {all_params}"
-            
             for word in q_words:
                 if word in name_lower:
-                    score += 10  # Name match is highest priority
+                    score += 10
                 elif word in brand:
                     score += 8
                 elif word in category:
@@ -164,41 +153,44 @@ async def search_products(
                 continue
                 
             # Bonus for exact full query match in name
-            full_query = q.lower() if q else ""
-            if full_query in name_lower:
+            if q.lower() in name_lower:
                 score += 20
                 
             scored_results.append((score, p))
         else:
             scored_results.append((0, p))
     
-    # Sort by relevance score (highest first)
     scored_results.sort(key=lambda x: (-x[0], x[1]["price"]))
-    
     results = [item[1] for item in scored_results[:limit]]
-    
     return {"results": results, "total_found": len(results), "query": q}
+@app.get("/search")
+async def search_products(
+    q: Optional[str] = Query(None),
+    category_id: Optional[str] = Query(None),
+    min_price: Optional[float] = Query(None),
+    max_price: Optional[float] = Query(None),
+    users: Optional[str] = Query(None),
+    limit: int = Query(10)
+):
+    return _do_search(q=q, category_id=category_id, min_price=min_price,
+                      max_price=max_price, users=users, limit=limit)
 @app.post("/search")
 async def search_products_post(body: SearchRequest):
-    """POST version of search - accepts JSON body. Used by Make.com AI Agent."""
-    return await search_products(
-        q=body.q,
-        category_id=body.category_id,
-        min_price=body.min_price,
-        max_price=body.max_price,
-        users=body.users,
-        limit=body.limit
-    )
+    return _do_search(q=body.q, category_id=body.category_id,
+                      min_price=body.min_price, max_price=body.max_price,
+                      users=body.users, limit=body.limit)
+@app.get("/find/{query}")
+async def find_products(query: str, limit: int = 10):
+    """Search by query in URL path. Example: /find/Топас 5"""
+    return _do_search(q=query, limit=limit)
 @app.post("/")
 async def catch_all_post(request: Request):
-    """Catch-all POST endpoint for AI Agent flexibility.
-    Accepts any JSON with a 'q' field and searches products."""
+    """Catch-all POST for AI Agent flexibility."""
     try:
         data = await request.json()
         q = data.get("q") or data.get("query") or data.get("search") or data.get("queryParameters", {}).get("q")
         limit = data.get("limit", 10)
         if not q:
-            # Try to find any string value in the data
             for v in data.values():
                 if isinstance(v, str) and len(v) > 1:
                     q = v
@@ -208,14 +200,9 @@ async def catch_all_post(request: Request):
                         if isinstance(vv, str) and len(vv) > 1:
                             q = vv
                             break
-        return await search_products(q=q, limit=limit)
+        return _do_search(q=q, limit=limit)
     except Exception as e:
         return {"error": str(e), "results": [], "total_found": 0}
-@app.get("/find/{query}")
-async def find_products(query: str, limit: int = 10):
-    """Search by query in URL path. Simplest format for AI Agent.
-    Example: /find/Топас 5"""
-    return await search_products(q=query, limit=limit)
 @app.get("/product/{product_id}")
 async def get_product(product_id: str):
     """Get a specific product by ID."""
