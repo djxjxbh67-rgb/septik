@@ -211,6 +211,11 @@ async def catch_all_post(request: Request):
         return await search_products(q=q, limit=limit)
     except Exception as e:
         return {"error": str(e), "results": [], "total_found": 0}
+@app.get("/find/{query}")
+async def find_products(query: str, limit: int = 10):
+    """Search by query in URL path. Simplest format for AI Agent.
+    Example: /find/Топас 5"""
+    return await search_products(q=query, limit=limit)
 @app.get("/product/{product_id}")
 async def get_product(product_id: str):
     """Get a specific product by ID."""
