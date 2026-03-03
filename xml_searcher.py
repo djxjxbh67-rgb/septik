@@ -8,6 +8,7 @@ from pydantic import BaseModel
 import re
 import html
 import json
+from difflib import SequenceMatcher
 app = FastAPI(title="Septic Store API", description="Microservice for searching products in XML feed")
 # Allow CORS from any origin (for Make.com and widget)
 app.add_middleware(
@@ -30,6 +31,56 @@ CACHE = {
     "last_updated": None
 }
 FEED_URL = "https://lenkanal.ru/bitrix/catalog_export/fid.xml"
+# Latin to Cyrillic transliteration map
+LATIN_TO_CYRILLIC = {
+    'a': 'а', 'b': 'б', 'v': 'в', 'g': 'г', 'd': 'д', 'e': 'е',
+    'zh': 'ж', 'z': 'з', 'i': 'и', 'y': 'й', 'k': 'к', 'l': 'л',
+    'm': 'м', 'n': 'н', 'o': 'о', 'p': 'п', 'r': 'р', 's': 'с',
+    't': 'т', 'u': 'у', 'f': 'ф', 'kh': 'х', 'h': 'х', 'ts': 'ц',
+    'ch': 'ч', 'sh': 'ш', 'shch': 'щ', 'yu': 'ю', 'ya': 'я',
+}
+# Common brand typos/misspellings -> correct name
+TYPO_CORRECTIONS = {
+    'топаз': 'топас', 'topas': 'топас', 'topaz': 'топас',
+    'евролас': 'евролос', 'евралос': 'евролос', 'evrolos': 'евролос',
+    'биодэка': 'биодека', 'biodeka': 'биодека',
+    'юнилос': 'юнилос астра', 'unilos': 'юнилос астра',
+    'астра': 'юнилос астра',
+    'генезис': 'генезис', 'genesis': 'генезис',
+    'коловеси': 'коло веси', 'kolo vesi': 'коло веси',
+    'термит': 'термит', 'termit': 'термит',
+    'тритон': 'тритон', 'triton': 'тритон',
+    'гарда': 'garda', 'garda': 'garda',
+    'аквалос': 'аквалос', 'akvalos': 'аквалос',
+    'альтабио': 'альта био', 'alta bio': 'альта био',
+    'биотанк': 'биотанк', 'biotank': 'биотанк',
+    'росток': 'росток', 'rostok': 'росток',
+    'танк': 'танк', 'tank': 'танк',
+    'лидер': 'лидер', 'lider': 'лидер',
+    'кессон': 'кессон', 'kesson': 'кессон',
+}
+def transliterate_to_cyrillic(text: str) -> str:
+    """Convert Latin text to Cyrillic approximation."""
+    result = text.lower()
+    # Sort by length (longer first) to handle 'shch' before 'sh'
+    for lat, cyr in sorted(LATIN_TO_CYRILLIC.items(), key=lambda x: -len(x[0])):
+        result = result.replace(lat, cyr)
+    return result
+def fix_typos(query: str) -> str:
+    """Fix common typos and transliterate if needed."""
+    q_lower = query.lower().strip()
+    # Check direct typo match
+    for typo, correct in TYPO_CORRECTIONS.items():
+        if typo in q_lower:
+            q_lower = q_lower.replace(typo, correct)
+            return q_lower
+    # If query has Latin characters, try transliteration
+    if re.search(r'[a-zA-Z]', query):
+        return transliterate_to_cyrillic(q_lower)
+    return q_lower
+def fuzzy_match(word: str, target: str, threshold: float = 0.7) -> float:
+    """Return similarity ratio between word and target."""
+    return SequenceMatcher(None, word.lower(), target.lower()).ratio()
 def clean_text(text: str) -> str:
     if not text:
         return ""
@@ -107,62 +158,84 @@ async def startup_event():
 async def get_categories():
     """Returns all categories."""
     return {"categories": list(CACHE["categories"].values())}
-def _do_search(q=None, category_id=None, min_price=None, max_price=None, users=None, limit=10):
-    """Core search logic - plain function, no FastAPI dependencies."""
-    scored_results = []
+def _score_product(p, q_words, q_original):
+    """Score a single product against query words. Returns score or 0."""
+    score = 0
+    name_lower = p["name"].lower()
+    brand = p["params"].get("Бренд", "").lower()
+    category = p.get("category_name", "").lower()
+    all_params = " ".join(p["params"].values()).lower()
     
-    # Split query into individual words for flexible matching
-    q_words = [w.lower() for w in q.split()] if q else []
+    for word in q_words:
+        if word in name_lower:
+            score += 10
+        elif word in brand:
+            score += 8
+        elif word in category:
+            score += 5
+        elif word in all_params:
+            score += 3
+        elif word in p["description"].lower():
+            score += 1
+        else:
+            # Fuzzy match against brand name
+            if brand and fuzzy_match(word, brand) >= 0.75:
+                score += 6
+            # Fuzzy match against words in product name
+            elif any(fuzzy_match(word, nw) >= 0.75 for nw in name_lower.split() if len(nw) > 2):
+                score += 4
+    
+    if score == 0:
+        return 0
+    
+    # Bonus for exact full query match in name
+    if q_original and q_original.lower() in name_lower:
+        score += 20
+    
+    return score
+def _do_search(q=None, category_id=None, min_price=None, max_price=None, users=None, limit=10):
+    """Core search logic with fuzzy matching and typo correction."""
+    original_query = q
+    
+    # Step 1: Fix typos and transliterate
+    if q:
+        q_fixed = fix_typos(q)
+    else:
+        q_fixed = q
+    
+    # Step 2: Try search with corrected query
+    scored_results = []
+    q_words = [w.lower() for w in q_fixed.split()] if q_fixed else []
     
     for p in CACHE["products"]:
-        # Filter by category
         if category_id and p["category_id"] != category_id:
             continue
-        
-        # Filter by price range
         if min_price is not None and p["price"] < min_price:
             continue
         if max_price is not None and p["price"] > max_price:
             continue
-            
-        # Filter by number of users
         if users and p["params"].get("Количество пользователей", "") != users:
             continue
-            
-        # Score by query words
+        
         if q_words:
-            score = 0
-            name_lower = p["name"].lower()
-            brand = p["params"].get("Бренд", "").lower()
-            category = p.get("category_name", "").lower()
-            all_params = " ".join(p["params"].values()).lower()
-            
-            for word in q_words:
-                if word in name_lower:
-                    score += 10
-                elif word in brand:
-                    score += 8
-                elif word in category:
-                    score += 5
-                elif word in all_params:
-                    score += 3
-                elif word in p["description"].lower():
-                    score += 1
-                    
-            if score == 0:
-                continue
-                
-            # Bonus for exact full query match in name
-            if q.lower() in name_lower:
-                score += 20
-                
-            scored_results.append((score, p))
+            score = _score_product(p, q_words, q_fixed)
+            if score > 0:
+                scored_results.append((score, p))
         else:
             scored_results.append((0, p))
     
+    # Step 3: If no results and query was corrected, note that
+    corrected = q_fixed != (q.lower().strip() if q else q)
+    
     scored_results.sort(key=lambda x: (-x[0], x[1]["price"]))
     results = [item[1] for item in scored_results[:limit]]
-    return {"results": results, "total_found": len(results), "query": q}
+    
+    response = {"results": results, "total_found": len(results), "query": original_query}
+    if corrected and results:
+        response["corrected_query"] = q_fixed
+        response["note"] = f"Исправлено: '{original_query}' → '{q_fixed}'"
+    
+    return response
 @app.get("/search")
 async def search_products(
     q: Optional[str] = Query(None),
