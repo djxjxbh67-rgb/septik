@@ -1,4 +1,6 @@
 from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse
+import os
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
 import xml.etree.ElementTree as ET
@@ -283,6 +285,15 @@ async def get_product(product_id: str):
         if p["id"] == product_id:
             return p
     raise HTTPException(status_code=404, detail="Product not found")
+@app.get("/widget", response_class=HTMLResponse)
+async def widget_page():
+    """Serve the chat widget demo page."""
+    widget_path = os.path.join(os.path.dirname(__file__), "chat-widget.html")
+    try:
+        with open(widget_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Widget file not found")
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
