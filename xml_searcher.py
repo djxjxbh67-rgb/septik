@@ -61,6 +61,21 @@ TYPO_CORRECTIONS = {
     'лидер': 'лидер', 'lider': 'лидер',
     'кессон': 'кессон', 'kesson': 'кессон',
 }
+# Priority brands — shown first when priority=true
+PRIORITY_BRANDS = [
+    'евролос', 'zorde', 'зорде', 'итал', 'колос', 'optima', 'оптима',
+    'тверь', 'удача', 'novo eco', 'ново эко', 'евробион',
+    'биодевайс', 'далос', 'коло веси',
+]
+def is_priority_brand(product: dict) -> bool:
+    """Check if product belongs to a priority brand."""
+    brand = product.get('params', {}).get('Бренд', '').lower()
+    name = product.get('name', '').lower()
+    category = product.get('category_name', '').lower()
+    for pb in PRIORITY_BRANDS:
+        if pb in brand or pb in name or pb in category:
+            return True
+    return False
 def transliterate_to_cyrillic(text: str) -> str:
     """Convert Latin text to Cyrillic approximation."""
     result = text.lower()
@@ -195,7 +210,7 @@ def _score_product(p, q_words, q_original):
         score += 20
     
     return score
-def _do_search(q=None, category_id=None, min_price=None, max_price=None, users=None, limit=10):
+def _do_search(q=None, category_id=None, min_price=None, max_price=None, users=None, limit=10, priority=False):
     """Core search logic with fuzzy matching and typo correction."""
     original_query = q
     
@@ -230,12 +245,47 @@ def _do_search(q=None, category_id=None, min_price=None, max_price=None, users=N
     corrected = q_fixed != (q.lower().strip() if q else q)
     
     scored_results.sort(key=lambda x: (-x[0], x[1]["price"]))
+    
+    # Filter by priority brands if requested
+    if priority:
+        scored_results = [(s, p) for s, p in scored_results if is_priority_brand(p)]
+    
     results = [item[1] for item in scored_results[:limit]]
     
     response = {"results": results, "total_found": len(results), "query": original_query}
     if corrected and results:
         response["corrected_query"] = q_fixed
         response["note"] = f"Исправлено: '{original_query}' → '{q_fixed}'"
+    
+    # Auto-suggest priority brand alternatives if results contain non-priority brands
+    if results and not priority:
+        has_non_priority = any(not is_priority_brand(p) for p in results)
+        if has_non_priority:
+            # Collect user counts from found products
+            user_counts = set()
+            for p in results:
+                uc = p.get("params", {}).get("Количество пользователей", "")
+                if uc:
+                    user_counts.add(uc)
+            
+            # Find priority brand alternatives with matching user count
+            alternatives = []
+            seen_ids = {p["id"] for p in results}
+            for p in CACHE["products"]:
+                if p["id"] in seen_ids:
+                    continue
+                if not is_priority_brand(p):
+                    continue
+                p_users = p.get("params", {}).get("Количество пользователей", "")
+                if p_users in user_counts:
+                    alternatives.append(p)
+                    seen_ids.add(p["id"])
+            
+            # Sort by price and take top 3
+            alternatives.sort(key=lambda x: x["price"])
+            if alternatives:
+                response["priority_alternatives"] = alternatives[:3]
+                response["alternatives_note"] = "Рекомендуемые аналоги с высоким качеством очистки и надёжностью"
     
     return response
 @app.get("/search")
@@ -245,19 +295,20 @@ async def search_products(
     min_price: Optional[float] = Query(None),
     max_price: Optional[float] = Query(None),
     users: Optional[str] = Query(None),
-    limit: int = Query(10)
+    limit: int = Query(10),
+    priority: bool = Query(False)
 ):
     return _do_search(q=q, category_id=category_id, min_price=min_price,
-                      max_price=max_price, users=users, limit=limit)
+                      max_price=max_price, users=users, limit=limit, priority=priority)
 @app.post("/search")
 async def search_products_post(body: SearchRequest):
     return _do_search(q=body.q, category_id=body.category_id,
                       min_price=body.min_price, max_price=body.max_price,
                       users=body.users, limit=body.limit)
 @app.get("/find/{query}")
-async def find_products(query: str, limit: int = 10):
-    """Search by query in URL path. Example: /find/Топас 5"""
-    return _do_search(q=query, limit=limit)
+async def find_products(query: str, limit: int = 10, priority: bool = False):
+    """Search by query in URL path. Example: /find/Топас 5?priority=true"""
+    return _do_search(q=query, limit=limit, priority=priority)
 @app.post("/")
 async def catch_all_post(request: Request):
     """Catch-all POST for AI Agent flexibility."""
