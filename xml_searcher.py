@@ -11,7 +11,9 @@ import re
 import html
 import json
 from difflib import SequenceMatcher
+
 app = FastAPI(title="Septic Store API", description="Microservice for searching products in XML feed")
+
 # Allow CORS from any origin (for Make.com and widget)
 app.add_middleware(
     CORSMiddleware,
@@ -19,6 +21,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 class SearchRequest(BaseModel):
     q: Optional[str] = None
     category_id: Optional[str] = None
@@ -26,13 +29,16 @@ class SearchRequest(BaseModel):
     max_price: Optional[float] = None
     users: Optional[str] = None
     limit: int = 10
+
 # Global cache
 CACHE = {
     "categories": {}, # id -> {"id": str, "name": str, "parent_id": str}
     "products": [],   # list of product dicts
     "last_updated": None
 }
+
 FEED_URL = "https://lenkanal.ru/bitrix/catalog_export/fid.xml"
+
 # Latin to Cyrillic transliteration map
 LATIN_TO_CYRILLIC = {
     'a': 'а', 'b': 'б', 'v': 'в', 'g': 'г', 'd': 'д', 'e': 'е',
@@ -41,6 +47,7 @@ LATIN_TO_CYRILLIC = {
     't': 'т', 'u': 'у', 'f': 'ф', 'kh': 'х', 'h': 'х', 'ts': 'ц',
     'ch': 'ч', 'sh': 'ш', 'shch': 'щ', 'yu': 'ю', 'ya': 'я',
 }
+
 # Common brand typos/misspellings -> correct name
 TYPO_CORRECTIONS = {
     'топаз': 'топас', 'topas': 'топас', 'topaz': 'топас',
@@ -61,12 +68,14 @@ TYPO_CORRECTIONS = {
     'лидер': 'лидер', 'lider': 'лидер',
     'кессон': 'кессон', 'kesson': 'кессон',
 }
+
 # Priority brands — shown first when priority=true
 PRIORITY_BRANDS = [
     'евролос', 'zorde', 'зорде', 'итал', 'колос', 'optima', 'оптима',
     'тверь', 'удача', 'novo eco', 'ново эко', 'евробион',
     'биодевайс', 'далос', 'коло веси',
 ]
+
 def is_priority_brand(product: dict) -> bool:
     """Check if product belongs to a priority brand."""
     brand = product.get('params', {}).get('Бренд', '').lower()
@@ -76,6 +85,7 @@ def is_priority_brand(product: dict) -> bool:
         if pb in brand or pb in name or pb in category:
             return True
     return False
+
 def transliterate_to_cyrillic(text: str) -> str:
     """Convert Latin text to Cyrillic approximation."""
     result = text.lower()
@@ -83,6 +93,7 @@ def transliterate_to_cyrillic(text: str) -> str:
     for lat, cyr in sorted(LATIN_TO_CYRILLIC.items(), key=lambda x: -len(x[0])):
         result = result.replace(lat, cyr)
     return result
+
 def fix_typos(query: str) -> str:
     """Fix common typos and transliterate if needed."""
     q_lower = query.lower().strip()
@@ -95,9 +106,11 @@ def fix_typos(query: str) -> str:
     if re.search(r'[a-zA-Z]', query):
         return transliterate_to_cyrillic(q_lower)
     return q_lower
+
 def fuzzy_match(word: str, target: str, threshold: float = 0.7) -> float:
     """Return similarity ratio between word and target."""
     return SequenceMatcher(None, word.lower(), target.lower()).ratio()
+
 def clean_text(text: str) -> str:
     if not text:
         return ""
@@ -110,6 +123,7 @@ def clean_text(text: str) -> str:
     # Clean up whitespace
     text = re.sub(r'\s+', ' ', text).strip()
     return text
+
 async def fetch_and_parse_xml():
     print("Fetching XML...")
     async with httpx.AsyncClient() as client:
@@ -166,15 +180,18 @@ async def fetch_and_parse_xml():
             
         except Exception as e:
             print(f"Error fetching/parsing XML: {e}")
+
 @app.on_event("startup")
 async def startup_event():
     # Fetch immediately on startup
     await fetch_and_parse_xml()
     # TODO: Add background task for periodic updates if needed
+
 @app.get("/categories")
 async def get_categories():
     """Returns all categories."""
     return {"categories": list(CACHE["categories"].values())}
+
 def _score_product(p, q_words, q_original):
     """Score a single product against query words. Returns score or 0."""
     score = 0
@@ -210,10 +227,29 @@ def _score_product(p, q_words, q_original):
         score += 20
     
     return score
+
 def _do_search(q=None, category_id=None, min_price=None, max_price=None, users=None, limit=10, priority=False):
     """Core search logic with fuzzy matching and typo correction."""
+    import re
     original_query = q
     
+    # Step 0: Extract intent from text query
+    inferred_max_price = max_price
+    inferred_users = users
+    if q and not max_price:
+        m_price = re.search(r'(?:до|бюджет|цена\s*до|в\s*пределах)\s*(\d{2,3}(?:\s*\d{3})*)', q, flags=re.IGNORECASE)
+        if m_price:
+            inferred_max_price = float(m_price.group(1).replace(" ", ""))
+        else:
+            m_price_tr = re.search(r'(?:до|бюджет|цена\s*до|в\s*пределах)\s*(\d{2,3})\s*(?:т\.?р\.?|тыс|т\s*р)', q, flags=re.IGNORECASE)
+            if m_price_tr:
+                inferred_max_price = float(m_price_tr.group(1)) * 1000
+    
+    if q and not users:
+        m_users = re.search(r'(?:на|для|до)?\s*(\d+)\s*(?:чел|человек|персон|проживаю)', q, flags=re.IGNORECASE)
+        if m_users:
+            inferred_users = m_users.group(1)
+            
     # Step 1: Fix typos and transliterate
     if q:
         q_fixed = fix_typos(q)
@@ -234,12 +270,50 @@ def _do_search(q=None, category_id=None, min_price=None, max_price=None, users=N
         if users and p["params"].get("Количество пользователей", "") != users:
             continue
         
+        score = 0
         if q_words:
-            score = _score_product(p, q_words, q_fixed)
-            if score > 0:
-                scored_results.append((score, p))
-        else:
-            scored_results.append((0, p))
+            # text match adds 5 to 50 score
+            score += _score_product(p, q_words, q_fixed)
+            
+        # Apply intent boosts
+        if inferred_users:
+            p_users = str(p.get("params", {}).get("Количество пользователей", ""))
+            
+            target = 0
+            try:
+                target = int(inferred_users)
+            except ValueError:
+                pass
+                
+            if target > 0 and p_users:
+                if "-" in p_users:
+                    try:
+                        p1, p2 = map(int, p_users.split("-"))
+                        if p1 <= target <= p2:
+                            score += 50  # target falls within range
+                        elif target < p1 and p1 - target <= 3:
+                            score += 20  # range starts slightly above target
+                        # if target > p2 — too small, no boost
+                    except Exception:
+                        pass
+                elif p_users.isdigit():
+                    p_u = int(p_users)
+                    if p_u == target:
+                        score += 50  # exact match
+                    elif p_u > target and p_u <= target + 3:
+                        score += 30  # slightly larger, still great
+                    elif p_u > target + 3:
+                        score += 10  # much larger, but usable
+                    # if p_u < target — too small, no boost
+        
+        if inferred_max_price:
+            if p["price"] <= inferred_max_price:
+                score += 40
+            elif p["price"] <= inferred_max_price * 1.15: # allow up to 15% over
+                score += 20
+            
+        if score > 0 or not q_words:
+            scored_results.append((score, p))
     
     # Step 3: If no results and query was corrected, note that
     corrected = q_fixed != (q.lower().strip() if q else q)
@@ -288,6 +362,7 @@ def _do_search(q=None, category_id=None, min_price=None, max_price=None, users=N
                 response["alternatives_note"] = "Рекомендуемые аналоги с высоким качеством очистки и надёжностью"
     
     return response
+
 @app.get("/search")
 async def search_products(
     q: Optional[str] = Query(None),
@@ -300,15 +375,18 @@ async def search_products(
 ):
     return _do_search(q=q, category_id=category_id, min_price=min_price,
                       max_price=max_price, users=users, limit=limit, priority=priority)
+
 @app.post("/search")
 async def search_products_post(body: SearchRequest):
     return _do_search(q=body.q, category_id=body.category_id,
                       min_price=body.min_price, max_price=body.max_price,
                       users=body.users, limit=body.limit)
+
 @app.get("/find/{query}")
 async def find_products(query: str, limit: int = 10, priority: bool = False):
     """Search by query in URL path. Example: /find/Топас 5?priority=true"""
     return _do_search(q=query, limit=limit, priority=priority)
+
 @app.post("/")
 async def catch_all_post(request: Request):
     """Catch-all POST for AI Agent flexibility (Legacy)."""
@@ -329,6 +407,7 @@ async def catch_all_post(request: Request):
         return _do_search(q=q, limit=limit)
     except Exception as e:
         return {"error": str(e), "results": [], "total_found": 0}
+
 async def _extract_query_from_agent_post(request: Request) -> tuple[Optional[str], int]:
     """Helper to extract query and limit from various Make AI Agent JSON formats.
     
@@ -381,6 +460,7 @@ async def _extract_query_from_agent_post(request: Request) -> tuple[Optional[str
                     
             if q:
                 return q, limit
+
         # 2. Standard flat JSON formats
         q = data.get("q") or data.get("query") or data.get("search") or data.get("queryParameters", {}).get("q")
         limit = data.get("limit", 10)
@@ -415,6 +495,7 @@ async def _extract_query_from_agent_post(request: Request) -> tuple[Optional[str
             return q, limit
         except Exception:
             return None, 10
+
 @app.post("/api/agent/search_priority")
 async def agent_search_priority(request: Request):
     """Tool 1: Explicitly search ONLY priority brands."""
@@ -422,6 +503,7 @@ async def agent_search_priority(request: Request):
     if not q:
         return {"error": "No query provided", "results": [], "total_found": 0}
     return _do_search(q=q, limit=limit, priority=True)
+
 @app.post("/api/agent/search_all")
 async def agent_search_all(request: Request):
     """Tool 2: Search ALL brands (auto-includes priority alternatives)."""
@@ -429,6 +511,7 @@ async def agent_search_all(request: Request):
     if not q:
         return {"error": "No query provided", "results": [], "total_found": 0}
     return _do_search(q=q, limit=limit, priority=False)
+
 @app.get("/product/{product_id}")
 async def get_product(product_id: str):
     """Get a specific product by ID."""
@@ -436,6 +519,7 @@ async def get_product(product_id: str):
         if p["id"] == product_id:
             return p
     raise HTTPException(status_code=404, detail="Product not found")
+
 @app.get("/widget", response_class=HTMLResponse)
 async def widget_page():
     """Serve the chat widget demo page."""
@@ -445,6 +529,7 @@ async def widget_page():
             return HTMLResponse(content=f.read())
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Widget file not found")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
