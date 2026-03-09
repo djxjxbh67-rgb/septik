@@ -335,23 +335,26 @@ async def _extract_query_from_agent_post(request: Request) -> tuple[Optional[str
         # First try to parse as JSON
         data = await request.json()
         
-        # Make.com urlencoded array format
+        # 1. Make.com urlencoded array format
         if "urlEncodedBodyContent" in data and isinstance(data["urlEncodedBodyContent"], list):
             q = None
             limit = 10
             for item in data["urlEncodedBodyContent"]:
-                name = item.get("name", "").lower()
                 val = item.get("value", "")
-                if name in ("q", "query", "search"):
-                    q = val
-                elif name == "limit":
+                name = str(item.get("name", "")).lower()
+                
+                if name == "limit":
                     try:
                         limit = int(val)
                     except ValueError:
                         pass
+                elif isinstance(val, str) and len(val) > 1:
+                    # Just grab the first string that looks like a query
+                    q = val
+                    
             if q:
                 return q, limit
-        # Standard flat JSON formats
+        # 2. Standard flat JSON formats
         q = data.get("q") or data.get("query") or data.get("search") or data.get("queryParameters", {}).get("q")
         limit = data.get("limit", 10)
         
@@ -368,12 +371,20 @@ async def _extract_query_from_agent_post(request: Request) -> tuple[Optional[str
                             break
         return q, limit
     except Exception:
-        # If not JSON, try reading as raw form data
+        # 3. If not JSON, try reading as raw HTML form data
         try:
             form_data = await request.form()
-            q = form_data.get("q") or form_data.get("query") or form_data.get("search")
-            limit_str = form_data.get("limit")
-            limit = int(limit_str) if limit_str and limit_str.isdigit() else 10
+            q = None
+            limit = 10
+            # Iterate through form fields, grab first valid string
+            for key, val in form_data.items():
+                if key.lower() == "limit":
+                    try:
+                        limit = int(val)
+                    except ValueError:
+                        pass
+                elif isinstance(val, str) and len(val) > 1 and not q:
+                    q = val
             return q, limit
         except Exception:
             return None, 10
