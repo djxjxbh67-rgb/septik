@@ -332,9 +332,29 @@ async def catch_all_post(request: Request):
 async def _extract_query_from_agent_post(request: Request) -> tuple[Optional[str], int]:
     """Helper to extract query and limit from various Make AI Agent JSON formats."""
     try:
+        # First try to parse as JSON
         data = await request.json()
+        
+        # Make.com urlencoded array format
+        if "urlEncodedBodyContent" in data and isinstance(data["urlEncodedBodyContent"], list):
+            q = None
+            limit = 10
+            for item in data["urlEncodedBodyContent"]:
+                name = item.get("name", "").lower()
+                val = item.get("value", "")
+                if name in ("q", "query", "search"):
+                    q = val
+                elif name == "limit":
+                    try:
+                        limit = int(val)
+                    except ValueError:
+                        pass
+            if q:
+                return q, limit
+        # Standard flat JSON formats
         q = data.get("q") or data.get("query") or data.get("search") or data.get("queryParameters", {}).get("q")
         limit = data.get("limit", 10)
+        
         if not q:
             # Fallback for finding the first string value looking like a query
             for v in data.values():
@@ -348,7 +368,15 @@ async def _extract_query_from_agent_post(request: Request) -> tuple[Optional[str
                             break
         return q, limit
     except Exception:
-        return None, 10
+        # If not JSON, try reading as raw form data
+        try:
+            form_data = await request.form()
+            q = form_data.get("q") or form_data.get("query") or form_data.get("search")
+            limit_str = form_data.get("limit")
+            limit = int(limit_str) if limit_str and limit_str.isdigit() else 10
+            return q, limit
+        except Exception:
+            return None, 10
 @app.post("/api/agent/search_priority")
 async def agent_search_priority(request: Request):
     """Tool 1: Explicitly search ONLY priority brands."""
