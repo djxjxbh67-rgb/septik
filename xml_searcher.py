@@ -330,10 +330,37 @@ async def catch_all_post(request: Request):
     except Exception as e:
         return {"error": str(e), "results": [], "total_found": 0}
 async def _extract_query_from_agent_post(request: Request) -> tuple[Optional[str], int]:
-    """Helper to extract query and limit from various Make AI Agent JSON formats."""
+    """Helper to extract query and limit from various Make AI Agent JSON formats.
+    
+    Make.com AI Agent wraps payloads in special keys depending on Body input method:
+    - JSON string  -> {"jsonStringBodyContent": "{\"query\": \"...\"}"}
+    - urlencoded   -> {"urlEncodedBodyContent": [{"name":"query","value":"..."}]}
+    - Raw/direct   -> {"q": "..."} or {"query": "..."}
+    """
+    import json as json_module
     try:
         # First try to parse as JSON
         data = await request.json()
+        
+        # 0. Make.com "JSON string" wrapper — the agent sends a JSON string inside a string
+        if "jsonStringBodyContent" in data:
+            try:
+                inner = json_module.loads(data["jsonStringBodyContent"])
+                q = inner.get("q") or inner.get("query") or inner.get("search")
+                limit = inner.get("limit", 10)
+                if not q:
+                    # Grab first string value > 1 char
+                    for v in inner.values():
+                        if isinstance(v, str) and len(v) > 1:
+                            q = v
+                            break
+                if q:
+                    return q, limit
+            except (json_module.JSONDecodeError, TypeError, AttributeError):
+                # If inner content is not valid JSON, treat as raw query string
+                raw = str(data["jsonStringBodyContent"]).strip()
+                if len(raw) > 1:
+                    return raw, 10
         
         # 1. Make.com urlencoded array format
         if "urlEncodedBodyContent" in data and isinstance(data["urlEncodedBodyContent"], list):
