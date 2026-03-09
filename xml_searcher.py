@@ -311,7 +311,7 @@ async def find_products(query: str, limit: int = 10, priority: bool = False):
     return _do_search(q=query, limit=limit, priority=priority)
 @app.post("/")
 async def catch_all_post(request: Request):
-    """Catch-all POST for AI Agent flexibility."""
+    """Catch-all POST for AI Agent flexibility (Legacy)."""
     try:
         data = await request.json()
         q = data.get("q") or data.get("query") or data.get("search") or data.get("queryParameters", {}).get("q")
@@ -329,6 +329,40 @@ async def catch_all_post(request: Request):
         return _do_search(q=q, limit=limit)
     except Exception as e:
         return {"error": str(e), "results": [], "total_found": 0}
+async def _extract_query_from_agent_post(request: Request) -> tuple[Optional[str], int]:
+    """Helper to extract query and limit from various Make AI Agent JSON formats."""
+    try:
+        data = await request.json()
+        q = data.get("q") or data.get("query") or data.get("search") or data.get("queryParameters", {}).get("q")
+        limit = data.get("limit", 10)
+        if not q:
+            # Fallback for finding the first string value looking like a query
+            for v in data.values():
+                if isinstance(v, str) and len(v) > 1:
+                    q = v
+                    break
+                elif isinstance(v, dict):
+                    for vv in v.values():
+                        if isinstance(vv, str) and len(vv) > 1:
+                            q = vv
+                            break
+        return q, limit
+    except Exception:
+        return None, 10
+@app.post("/api/agent/search_priority")
+async def agent_search_priority(request: Request):
+    """Tool 1: Explicitly search ONLY priority brands."""
+    q, limit = await _extract_query_from_agent_post(request)
+    if not q:
+        return {"error": "No query provided", "results": [], "total_found": 0}
+    return _do_search(q=q, limit=limit, priority=True)
+@app.post("/api/agent/search_all")
+async def agent_search_all(request: Request):
+    """Tool 2: Search ALL brands (auto-includes priority alternatives)."""
+    q, limit = await _extract_query_from_agent_post(request)
+    if not q:
+        return {"error": "No query provided", "results": [], "total_found": 0}
+    return _do_search(q=q, limit=limit, priority=False)
 @app.get("/product/{product_id}")
 async def get_product(product_id: str):
     """Get a specific product by ID."""
