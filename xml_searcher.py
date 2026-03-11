@@ -159,6 +159,14 @@ async def fetch_and_parse_xml():
                     "params": {}
                 }
                 
+                # Extract oldprice if available
+                oldprice_text = offer.findtext("oldprice")
+                if oldprice_text:
+                    try:
+                        product["oldprice"] = float(oldprice_text)
+                    except ValueError:
+                        pass
+                
                 # Extract params (brand, size, etc.)
                 for param in offer.findall("param"):
                     param_name = param.get("name")
