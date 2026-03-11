@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ru">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,6 +11,7 @@
    CHAT WIDGET STYLES
    Вставьте этот CSS на ваш сайт
    ============================================ */
+
         :root {
             --chat-primary: #2f990c;
             --chat-primary-light: #3abf10;
@@ -22,16 +24,19 @@
             --chat-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
             --chat-radius: 16px;
         }
+
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
         }
+
         body {
             font-family: 'Inter', -apple-system, sans-serif;
             background: #e8edf2;
             min-height: 100vh;
         }
+
         /* ---- Toggle Button ---- */
         #chat-toggle {
             position: fixed;
@@ -51,18 +56,22 @@
             justify-content: center;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
+
         #chat-toggle:hover {
             transform: scale(1.08);
             box-shadow: 0 6px 28px rgba(26, 82, 118, 0.5);
         }
+
         #chat-toggle svg {
             width: 28px;
             height: 28px;
             transition: transform 0.3s ease;
         }
+
         #chat-toggle.active svg {
             transform: rotate(90deg);
         }
+
         /* Notification badge */
         #chat-badge {
             position: absolute;
@@ -80,15 +89,19 @@
             justify-content: center;
             animation: pulse-badge 2s ease-in-out infinite;
         }
+
         @keyframes pulse-badge {
+
             0%,
             100% {
                 transform: scale(1);
             }
+
             50% {
                 transform: scale(1.15);
             }
         }
+
         /* ---- Chat Window ---- */
         #chat-window {
             position: fixed;
@@ -110,11 +123,13 @@
             pointer-events: none;
             transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
         }
+
         #chat-window.open {
             opacity: 1;
             transform: translateY(0) scale(1);
             pointer-events: all;
         }
+
         /* ---- Header ---- */
         #chat-header {
             background: linear-gradient(135deg, var(--chat-primary), var(--chat-primary-light));
@@ -125,6 +140,7 @@
             gap: 12px;
             flex-shrink: 0;
         }
+
         #chat-header-avatar {
             width: 42px;
             height: 42px;
@@ -136,15 +152,18 @@
             font-size: 20px;
             flex-shrink: 0;
         }
+
         #chat-header-info h3 {
             font-size: 15px;
             font-weight: 600;
             margin-bottom: 2px;
         }
+
         #chat-header-info p {
             font-size: 12px;
             opacity: 0.85;
         }
+
         #chat-header-status {
             width: 8px;
             height: 8px;
@@ -154,15 +173,19 @@
             margin-right: 4px;
             animation: status-pulse 2s ease-in-out infinite;
         }
+
         @keyframes status-pulse {
+
             0%,
             100% {
                 opacity: 1;
             }
+
             50% {
                 opacity: 0.5;
             }
         }
+
         /* ---- Messages Area ---- */
         #chat-messages {
             flex: 1;
@@ -173,16 +196,20 @@
             gap: 12px;
             scroll-behavior: smooth;
         }
+
         #chat-messages::-webkit-scrollbar {
             width: 5px;
         }
+
         #chat-messages::-webkit-scrollbar-track {
             background: transparent;
         }
+
         #chat-messages::-webkit-scrollbar-thumb {
             background: rgba(0, 0, 0, 0.15);
             border-radius: 10px;
         }
+
         /* ---- Message Bubbles ---- */
         .chat-msg {
             display: flex;
@@ -190,23 +217,28 @@
             max-width: 88%;
             animation: msg-in 0.3s ease-out;
         }
+
         @keyframes msg-in {
             from {
                 opacity: 0;
                 transform: translateY(8px);
             }
+
             to {
                 opacity: 1;
                 transform: translateY(0);
             }
         }
+
         .chat-msg.user {
             align-self: flex-end;
             flex-direction: row-reverse;
         }
+
         .chat-msg.bot {
             align-self: flex-start;
         }
+
         .msg-avatar {
             width: 32px;
             height: 32px;
@@ -217,14 +249,17 @@
             justify-content: center;
             font-size: 14px;
         }
+
         .chat-msg.bot .msg-avatar {
             background: linear-gradient(135deg, var(--chat-primary), var(--chat-primary-light));
             color: #fff;
         }
+
         .chat-msg.user .msg-avatar {
             background: #dfe6ed;
             color: var(--chat-text);
         }
+
         .msg-bubble {
             padding: 12px 16px;
             border-radius: 14px;
@@ -232,17 +267,20 @@
             line-height: 1.55;
             word-break: break-word;
         }
+
         .chat-msg.bot .msg-bubble {
             background: var(--chat-bot-bubble);
             color: var(--chat-text);
             border-bottom-left-radius: 4px;
             box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
         }
+
         .chat-msg.user .msg-bubble {
             background: var(--chat-user-bubble);
             color: #fff;
             border-bottom-right-radius: 4px;
         }
+
         /* Links in bot messages */
         .msg-bubble a {
             color: var(--chat-primary-light);
@@ -250,15 +288,18 @@
             text-decoration-color: rgba(41, 128, 185, 0.3);
             transition: text-decoration-color 0.2s;
         }
+
         .msg-bubble a:hover {
             text-decoration-color: var(--chat-primary-light);
         }
+
         /* ---- Typing Indicator ---- */
         .typing-indicator {
             display: flex;
             gap: 4px;
             padding: 12px 16px;
         }
+
         .typing-indicator span {
             width: 8px;
             height: 8px;
@@ -266,24 +307,30 @@
             border-radius: 50%;
             animation: typing-dot 1.4s ease-in-out infinite;
         }
+
         .typing-indicator span:nth-child(2) {
             animation-delay: 0.2s;
         }
+
         .typing-indicator span:nth-child(3) {
             animation-delay: 0.4s;
         }
+
         @keyframes typing-dot {
+
             0%,
             60%,
             100% {
                 transform: translateY(0);
                 opacity: 0.4;
             }
+
             30% {
                 transform: translateY(-6px);
                 opacity: 1;
             }
         }
+
         /* ---- Input Area ---- */
         #chat-input-area {
             padding: 12px 16px;
@@ -294,6 +341,7 @@
             gap: 10px;
             flex-shrink: 0;
         }
+
         #chat-input {
             flex: 1;
             border: 1.5px solid #dfe6ed;
@@ -306,13 +354,16 @@
             background: #f8fafc;
             color: var(--chat-text);
         }
+
         #chat-input:focus {
             border-color: var(--chat-primary-light);
             background: #fff;
         }
+
         #chat-input::placeholder {
             color: #aab5c0;
         }
+
         #chat-send {
             width: 42px;
             height: 42px;
@@ -327,22 +378,27 @@
             flex-shrink: 0;
             transition: all 0.2s;
         }
+
         #chat-send:hover {
             transform: scale(1.06);
             box-shadow: 0 2px 12px rgba(26, 82, 118, 0.3);
         }
+
         #chat-send:active {
             transform: scale(0.96);
         }
+
         #chat-send:disabled {
             opacity: 0.5;
             cursor: not-allowed;
             transform: none;
         }
+
         #chat-send svg {
             width: 18px;
             height: 18px;
         }
+
         /* ---- Powered by ---- */
         #chat-footer {
             text-align: center;
@@ -351,10 +407,12 @@
             color: var(--chat-text-light);
             background: #fff;
         }
+
         #chat-footer a {
             color: var(--chat-primary-light);
             text-decoration: none;
         }
+
         /* ---- Quick Actions ---- */
         .quick-actions {
             display: flex;
@@ -362,6 +420,7 @@
             gap: 6px;
             margin-top: 8px;
         }
+
         .quick-btn {
             padding: 6px 14px;
             border-radius: 20px;
@@ -373,10 +432,12 @@
             cursor: pointer;
             transition: all 0.2s;
         }
+
         .quick-btn:hover {
             background: var(--chat-primary-light);
             color: #fff;
         }
+
         /* ---- Mobile ---- */
         @media (max-width: 480px) {
             #chat-window {
@@ -388,6 +449,7 @@
                 max-height: 100vh;
                 border-radius: 0;
             }
+
             #chat-toggle {
                 bottom: 16px;
                 right: 16px;
@@ -395,10 +457,13 @@
         }
     </style>
 </head>
+
 <body>
+
     <!-- ============================================
      CHAT WIDGET HTML
      ============================================ -->
+
     <!-- Toggle Button -->
     <button id="chat-toggle" aria-label="Открыть чат">
         <span id="chat-badge">1</span>
@@ -407,6 +472,7 @@
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
         </svg>
     </button>
+
     <!-- Chat Window -->
     <div id="chat-window">
         <div id="chat-header">
@@ -416,7 +482,9 @@
                 <p><span id="chat-header-status"></span>Онлайн — отвечаем моментально</p>
             </div>
         </div>
+
         <div id="chat-messages"></div>
+
         <div id="chat-input-area">
             <input id="chat-input" type="text" placeholder="Напишите ваш вопрос..." autocomplete="off" />
             <button id="chat-send" aria-label="Отправить">
@@ -425,10 +493,12 @@
                 </svg>
             </button>
         </div>
+
         <div id="chat-footer">
             <a href="https://lenkanal.ru" target="_blank">lenkanal.ru</a> — септики и автономные канализации
         </div>
     </div>
+
     <script>
         /* ============================================
            CHAT WIDGET LOGIC
@@ -437,29 +507,35 @@
             // =============================================
             // ⚠️  ЗАМЕНИТЕ НА ВАШ WEBHOOK URL ИЗ MAKE.COM
             // =============================================
-            const WEBHOOK_URL = 'https://hook.us2.make.com/h3ssurbsqu4l1qaw1fb5rhbtn4q6ee47';
+            const WEBHOOK_URL = 'https://hook.us2.make.com/q4j6zcnhjwg6fdbti5ne8h5nsfes8co1';
+
             const toggle = document.getElementById('chat-toggle');
             const window_ = document.getElementById('chat-window');
             const messages = document.getElementById('chat-messages');
             const input = document.getElementById('chat-input');
             const sendBtn = document.getElementById('chat-send');
             const badge = document.getElementById('chat-badge');
+
             let isOpen = false;
             let sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
             let isWaiting = false;
+
             // --- Toggle Chat ---
             toggle.addEventListener('click', () => {
                 isOpen = !isOpen;
                 window_.classList.toggle('open', isOpen);
                 toggle.classList.toggle('active', isOpen);
                 badge.style.display = 'none';
+
                 if (isOpen && messages.children.length === 0) {
                     showWelcome();
                 }
+
                 if (isOpen) {
                     setTimeout(() => input.focus(), 400);
                 }
             });
+
             // --- Welcome Message ---
             function showWelcome() {
                 addBotMessage(
@@ -467,6 +543,7 @@
                     'Помогу подобрать септик или автономную канализацию для вашего дома.\n\n' +
                     'Расскажите, что вас интересует?'
                 );
+
                 const quickBtns = [
                     'Подобрать септик',
                     'Узнать цену',
@@ -475,15 +552,19 @@
                 ];
                 addQuickActions(quickBtns);
             }
+
             // --- Send Message ---
             function sendMessage() {
                 const text = input.value.trim();
                 if (!text || isWaiting) return;
+
                 addUserMessage(text);
                 input.value = '';
                 isWaiting = true;
                 sendBtn.disabled = true;
+
                 const typingEl = showTyping();
+
                 fetch(WEBHOOK_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -499,7 +580,9 @@
                     .then(rawText => {
                         removeTyping(typingEl);
                         console.log('Raw response:', rawText);
+
                         let reply = '';
+
                         // Try to parse as JSON
                         try {
                             const data = JSON.parse(rawText);
@@ -515,15 +598,18 @@
                                     .replace(/"?\s*\}\s*$/, '');
                             }
                         }
+
                         // Clean up escaped characters
                         reply = reply
                             .replace(/\\n/g, '\n')
                             .replace(/\\"/g, '"')
                             .replace(/\\\\/g, '\\')
                             .replace(/^["']|["']$/g, '');
+
                         if (!reply || reply === '{}' || reply === 'Accepted') {
                             reply = 'Извините, не удалось получить ответ. Попробуйте переформулировать вопрос или позвоните: <b>+7 (812) 409-96-30</b>';
                         }
+
                         addBotMessage(reply);
                     })
                     .catch(err => {
@@ -540,6 +626,7 @@
                         input.focus();
                     });
             }
+
             // --- Event Listeners ---
             sendBtn.addEventListener('click', sendMessage);
             input.addEventListener('keydown', (e) => {
@@ -548,6 +635,7 @@
                     sendMessage();
                 }
             });
+
             // --- Message Helpers ---
             function addUserMessage(text) {
                 const div = document.createElement('div');
@@ -559,6 +647,7 @@
                 messages.appendChild(div);
                 scrollToBottom();
             }
+
             function addBotMessage(text) {
                 const div = document.createElement('div');
                 div.className = 'chat-msg bot';
@@ -569,6 +658,7 @@
                 messages.appendChild(div);
                 scrollToBottom();
             }
+
             function addQuickActions(buttons) {
                 const lastMsg = messages.lastElementChild;
                 if (!lastMsg) return;
@@ -589,6 +679,7 @@
                 });
                 bubble.appendChild(actionsDiv);
             }
+
             function showTyping() {
                 const div = document.createElement('div');
                 div.className = 'chat-msg bot';
@@ -605,20 +696,24 @@
                 scrollToBottom();
                 return div;
             }
+
             function removeTyping(el) {
                 if (el && el.parentNode) el.parentNode.removeChild(el);
             }
+
             function scrollToBottom() {
                 requestAnimationFrame(() => {
                     messages.scrollTop = messages.scrollHeight;
                 });
             }
+
             // --- Text Formatting ---
             function escapeHtml(text) {
                 const div = document.createElement('div');
                 div.textContent = text;
                 return div.innerHTML;
             }
+
             function formatMessage(text) {
                 if (!text) return '';
                 // Convert line breaks
@@ -639,5 +734,7 @@
             }
         })();
     </script>
+
 </body>
+
 </html>
