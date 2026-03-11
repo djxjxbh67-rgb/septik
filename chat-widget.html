@@ -62,10 +62,11 @@ TYPO_CORRECTIONS = {
     'генезис': 'genesis', 'genesis': 'genesis',
     'гарда': 'garda', 'garda': 'garda',
     'оптима': 'optima', 'обтима': 'optima', 'optima': 'optima',
+    'оптиму': 'optima', 'оптимы': 'optima', 'оптиме': 'optima', 'оптимой': 'optima', 'оптим': 'optima',
     'зорде': 'zorde', 'zorde': 'zorde',
     'флиппер': 'flipper', 'флипер': 'flipper', 'flipper': 'flipper',
     'ново эко': 'novo eco', 'новоэко': 'novo eco', 'novo eco': 'novo eco',
-    'сани': 'sani', 'sani': 'sani',
+    'сани': 'sani', 'sani': 'sani', 'саней': 'sani', 'саням': 'sani', 'санями': 'sani', 'санях': 'sani',
     'вортекс': 'vortex', 'vortex': 'vortex',
     'воданов': 'vodanoff', 'воданофф': 'vodanoff', 'vodanoff': 'vodanoff',
     'форза': 'g forza', 'forza': 'g forza', 'g forza': 'g forza',
@@ -94,15 +95,28 @@ def transliterate_to_cyrillic(text: str) -> str:
     return result
 def fix_typos(query: str) -> str:
     """Fix common typos and transliterate if needed."""
+    if not query:
+        return ""
+        
     q_lower = query.lower().strip()
-    # Check direct typo match
-    for typo, correct in TYPO_CORRECTIONS.items():
-        if typo in q_lower:
-            q_lower = q_lower.replace(typo, correct)
-            return q_lower
-    # If query has Latin characters, try transliteration
-    if re.search(r'[a-zA-Z]', query):
-        return transliterate_to_cyrillic(q_lower)
+    
+    # 1. Translate backwards-typed english chars into cyrillic if someone forgot to switch keyboard layout
+    # BUT only for specific accidental strokes. Actually, it's safer to just rely on TYPO_CORRECTIONS
+    # Transliterating any Latin char to Cyrillic destroys legitimate English brand names like 'Sani', 'Optima'.
+    # We remove the global LATIN_TO_CYRILLIC auto-convert entirely to prevent it from mutating valid brands.
+    
+    # 2. Replace all occurrences of known typos using regex \b (word boundaries) so we don't break 'оптимальный'
+    import re
+    # We sort by length descending to replace longer phrases like 'ново эко' before 'эко'
+    sorted_typos = sorted(TYPO_CORRECTIONS.keys(), key=len, reverse=True)
+    
+    for typo in sorted_typos:
+        correct = TYPO_CORRECTIONS[typo]
+        # using \b for cyrillic and latin
+        # Note: in Python, \b works with unicode letters if re.UNICODE is set, which is default in Py3
+        pattern = r'\b' + re.escape(typo) + r'\b'
+        q_lower = re.sub(pattern, correct, q_lower)
+        
     return q_lower
 def fuzzy_match(word: str, target: str, threshold: float = 0.7) -> float:
     """Return similarity ratio between word and target."""
