@@ -70,6 +70,7 @@ TYPO_CORRECTIONS = {
     'вортекс': 'vortex', 'vortex': 'vortex',
     'воданов': 'vodanoff', 'воданофф': 'vodanoff', 'vodanoff': 'vodanoff',
     'форза': 'g forza', 'forza': 'g forza', 'g forza': 'g forza',
+    'акс': 'akc st', 'акс ст': 'akc st', 'aks': 'akc st', 'akc': 'akc st',
 }
 # Priority brands — shown first when priority=true
 PRIORITY_BRANDS = [
