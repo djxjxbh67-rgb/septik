@@ -1,740 +1,506 @@
-<!DOCTYPE html>
-<html lang="ru">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Чат-консультант | Ленканал</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        /* ============================================
-   CHAT WIDGET STYLES
-   Вставьте этот CSS на ваш сайт
-   ============================================ */
-
-        :root {
-            --chat-primary: #2f990c;
-            --chat-primary-light: #3abf10;
-            --chat-accent: #f39c12;
-            --chat-bg: #f0f4f8;
-            --chat-user-bubble: #2f990c;
-            --chat-bot-bubble: #ffffff;
-            --chat-text: #2c3e50;
-            --chat-text-light: #7f8c8d;
-            --chat-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
-            --chat-radius: 16px;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            font-family: 'Inter', -apple-system, sans-serif;
-            background: #e8edf2;
-            min-height: 100vh;
-        }
-
-        /* ---- Toggle Button ---- */
-        #chat-toggle {
-            position: fixed;
-            bottom: 24px;
-            right: 24px;
-            width: 64px;
-            height: 64px;
-            border-radius: 50%;
-            border: none;
-            background: linear-gradient(135deg, var(--chat-primary), var(--chat-primary-light));
-            color: #fff;
-            cursor: pointer;
-            box-shadow: 0 4px 20px rgba(26, 82, 118, 0.4);
-            z-index: 99999;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        #chat-toggle:hover {
-            transform: scale(1.08);
-            box-shadow: 0 6px 28px rgba(26, 82, 118, 0.5);
-        }
-
-        #chat-toggle svg {
-            width: 28px;
-            height: 28px;
-            transition: transform 0.3s ease;
-        }
-
-        #chat-toggle.active svg {
-            transform: rotate(90deg);
-        }
-
-        /* Notification badge */
-        #chat-badge {
-            position: absolute;
-            top: -2px;
-            right: -2px;
-            width: 20px;
-            height: 20px;
-            background: #e74c3c;
-            border-radius: 50%;
-            font-size: 11px;
-            font-weight: 700;
-            color: #fff;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            animation: pulse-badge 2s ease-in-out infinite;
-        }
-
-        @keyframes pulse-badge {
-
-            0%,
-            100% {
-                transform: scale(1);
-            }
-
-            50% {
-                transform: scale(1.15);
-            }
-        }
-
-        /* ---- Chat Window ---- */
-        #chat-window {
-            position: fixed;
-            bottom: 100px;
-            right: 24px;
-            width: 400px;
-            max-width: calc(100vw - 32px);
-            height: 560px;
-            max-height: calc(100vh - 140px);
-            background: var(--chat-bg);
-            border-radius: var(--chat-radius);
-            box-shadow: var(--chat-shadow);
-            z-index: 99998;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            opacity: 0;
-            transform: translateY(20px) scale(0.95);
-            pointer-events: none;
-            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        #chat-window.open {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-            pointer-events: all;
-        }
-
-        /* ---- Header ---- */
-        #chat-header {
-            background: linear-gradient(135deg, var(--chat-primary), var(--chat-primary-light));
-            color: #fff;
-            padding: 18px 20px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            flex-shrink: 0;
-        }
-
-        #chat-header-avatar {
-            width: 42px;
-            height: 42px;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.2);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-            flex-shrink: 0;
-        }
-
-        #chat-header-info h3 {
-            font-size: 15px;
-            font-weight: 600;
-            margin-bottom: 2px;
-        }
-
-        #chat-header-info p {
-            font-size: 12px;
-            opacity: 0.85;
-        }
-
-        #chat-header-status {
-            width: 8px;
-            height: 8px;
-            background: #2ecc71;
-            border-radius: 50%;
-            display: inline-block;
-            margin-right: 4px;
-            animation: status-pulse 2s ease-in-out infinite;
-        }
-
-        @keyframes status-pulse {
-
-            0%,
-            100% {
-                opacity: 1;
-            }
-
-            50% {
-                opacity: 0.5;
-            }
-        }
-
-        /* ---- Messages Area ---- */
-        #chat-messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            scroll-behavior: smooth;
-        }
-
-        #chat-messages::-webkit-scrollbar {
-            width: 5px;
-        }
-
-        #chat-messages::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        #chat-messages::-webkit-scrollbar-thumb {
-            background: rgba(0, 0, 0, 0.15);
-            border-radius: 10px;
-        }
-
-        /* ---- Message Bubbles ---- */
-        .chat-msg {
-            display: flex;
-            gap: 8px;
-            max-width: 88%;
-            animation: msg-in 0.3s ease-out;
-        }
-
-        @keyframes msg-in {
-            from {
-                opacity: 0;
-                transform: translateY(8px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .chat-msg.user {
-            align-self: flex-end;
-            flex-direction: row-reverse;
-        }
-
-        .chat-msg.bot {
-            align-self: flex-start;
-        }
-
-        .msg-avatar {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            flex-shrink: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 14px;
-        }
-
-        .chat-msg.bot .msg-avatar {
-            background: linear-gradient(135deg, var(--chat-primary), var(--chat-primary-light));
-            color: #fff;
-        }
-
-        .chat-msg.user .msg-avatar {
-            background: #dfe6ed;
-            color: var(--chat-text);
-        }
-
-        .msg-bubble {
-            padding: 12px 16px;
-            border-radius: 14px;
-            font-size: 14px;
-            line-height: 1.55;
-            word-break: break-word;
-        }
-
-        .chat-msg.bot .msg-bubble {
-            background: var(--chat-bot-bubble);
-            color: var(--chat-text);
-            border-bottom-left-radius: 4px;
-            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
-        }
-
-        .chat-msg.user .msg-bubble {
-            background: var(--chat-user-bubble);
-            color: #fff;
-            border-bottom-right-radius: 4px;
-        }
-
-        /* Links in bot messages */
-        .msg-bubble a {
-            color: var(--chat-primary-light);
-            text-decoration: underline;
-            text-decoration-color: rgba(41, 128, 185, 0.3);
-            transition: text-decoration-color 0.2s;
-        }
-
-        .msg-bubble a:hover {
-            text-decoration-color: var(--chat-primary-light);
-        }
-
-        /* ---- Typing Indicator ---- */
-        .typing-indicator {
-            display: flex;
-            gap: 4px;
-            padding: 12px 16px;
-        }
-
-        .typing-indicator span {
-            width: 8px;
-            height: 8px;
-            background: #bdc3c7;
-            border-radius: 50%;
-            animation: typing-dot 1.4s ease-in-out infinite;
-        }
-
-        .typing-indicator span:nth-child(2) {
-            animation-delay: 0.2s;
-        }
-
-        .typing-indicator span:nth-child(3) {
-            animation-delay: 0.4s;
-        }
-
-        @keyframes typing-dot {
-
-            0%,
-            60%,
-            100% {
-                transform: translateY(0);
-                opacity: 0.4;
-            }
-
-            30% {
-                transform: translateY(-6px);
-                opacity: 1;
-            }
-        }
-
-        /* ---- Input Area ---- */
-        #chat-input-area {
-            padding: 12px 16px;
-            background: #fff;
-            border-top: 1px solid #e8ecf0;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            flex-shrink: 0;
-        }
-
-        #chat-input {
-            flex: 1;
-            border: 1.5px solid #dfe6ed;
-            border-radius: 24px;
-            padding: 10px 18px;
-            font-size: 14px;
-            font-family: inherit;
-            outline: none;
-            transition: border-color 0.2s;
-            background: #f8fafc;
-            color: var(--chat-text);
-        }
-
-        #chat-input:focus {
-            border-color: var(--chat-primary-light);
-            background: #fff;
-        }
-
-        #chat-input::placeholder {
-            color: #aab5c0;
-        }
-
-        #chat-send {
-            width: 42px;
-            height: 42px;
-            border-radius: 50%;
-            border: none;
-            background: linear-gradient(135deg, var(--chat-primary), var(--chat-primary-light));
-            color: #fff;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-            transition: all 0.2s;
-        }
-
-        #chat-send:hover {
-            transform: scale(1.06);
-            box-shadow: 0 2px 12px rgba(26, 82, 118, 0.3);
-        }
-
-        #chat-send:active {
-            transform: scale(0.96);
-        }
-
-        #chat-send:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        #chat-send svg {
-            width: 18px;
-            height: 18px;
-        }
-
-        /* ---- Powered by ---- */
-        #chat-footer {
-            text-align: center;
-            padding: 6px;
-            font-size: 11px;
-            color: var(--chat-text-light);
-            background: #fff;
-        }
-
-        #chat-footer a {
-            color: var(--chat-primary-light);
-            text-decoration: none;
-        }
-
-        /* ---- Quick Actions ---- */
-        .quick-actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            margin-top: 8px;
-        }
-
-        .quick-btn {
-            padding: 6px 14px;
-            border-radius: 20px;
-            border: 1.5px solid var(--chat-primary-light);
-            background: transparent;
-            color: var(--chat-primary);
-            font-size: 12px;
-            font-family: inherit;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .quick-btn:hover {
-            background: var(--chat-primary-light);
-            color: #fff;
-        }
-
-        /* ---- Mobile ---- */
-        @media (max-width: 480px) {
-            #chat-window {
-                bottom: 0;
-                right: 0;
-                width: 100vw;
-                max-width: 100vw;
-                height: 100vh;
-                max-height: 100vh;
-                border-radius: 0;
-            }
-
-            #chat-toggle {
-                bottom: 16px;
-                right: 16px;
-            }
-        }
-    </style>
-</head>
-
-<body>
-
-    <!-- ============================================
-     CHAT WIDGET HTML
-     ============================================ -->
-
-    <!-- Toggle Button -->
-    <button id="chat-toggle" aria-label="Открыть чат">
-        <span id="chat-badge">1</span>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-            stroke-linejoin="round">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-        </svg>
-    </button>
-
-    <!-- Chat Window -->
-    <div id="chat-window">
-        <div id="chat-header">
-            <div id="chat-header-avatar">💧</div>
-            <div id="chat-header-info">
-                <h3>Консультант Ленканал</h3>
-                <p><span id="chat-header-status"></span>Онлайн — отвечаем моментально</p>
-            </div>
-        </div>
-
-        <div id="chat-messages"></div>
-
-        <div id="chat-input-area">
-            <input id="chat-input" type="text" placeholder="Напишите ваш вопрос..." autocomplete="off" />
-            <button id="chat-send" aria-label="Отправить">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-                </svg>
-            </button>
-        </div>
-
-        <div id="chat-footer">
-            <a href="https://lenkanal.ru" target="_blank">lenkanal.ru</a> — септики и автономные канализации
-        </div>
-    </div>
-
-    <script>
-        /* ============================================
-           CHAT WIDGET LOGIC
-           ============================================ */
-        (function () {
-            // =============================================
-            // ⚠️  ЗАМЕНИТЕ НА ВАШ WEBHOOK URL ИЗ MAKE.COM
-            // =============================================
-            const WEBHOOK_URL = 'https://hook.us2.make.com/q4j6zcnhjwg6fdbti5ne8h5nsfes8co1';
-
-            const toggle = document.getElementById('chat-toggle');
-            const window_ = document.getElementById('chat-window');
-            const messages = document.getElementById('chat-messages');
-            const input = document.getElementById('chat-input');
-            const sendBtn = document.getElementById('chat-send');
-            const badge = document.getElementById('chat-badge');
-
-            let isOpen = false;
-            let sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
-            let isWaiting = false;
-
-            // --- Toggle Chat ---
-            toggle.addEventListener('click', () => {
-                isOpen = !isOpen;
-                window_.classList.toggle('open', isOpen);
-                toggle.classList.toggle('active', isOpen);
-                badge.style.display = 'none';
-
-                if (isOpen && messages.children.length === 0) {
-                    showWelcome();
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse
+import os
+from fastapi.middleware.cors import CORSMiddleware
+import httpx
+import xml.etree.ElementTree as ET
+import asyncio
+from typing import List, Optional, Dict, Any
+from pydantic import BaseModel
+import re
+import html
+import json
+from difflib import SequenceMatcher
+app = FastAPI(title="Septic Store API", description="Microservice for searching products in XML feed")
+# Allow CORS from any origin (for Make.com and widget)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+class SearchRequest(BaseModel):
+    q: Optional[str] = None
+    category_id: Optional[str] = None
+    min_price: Optional[float] = None
+    max_price: Optional[float] = None
+    users: Optional[str] = None
+    limit: int = 10
+# Global cache
+CACHE = {
+    "categories": {}, # id -> {"id": str, "name": str, "parent_id": str}
+    "products": [],   # list of product dicts
+    "last_updated": None
+}
+FEED_URL = "https://lenkanal.ru/bitrix/catalog_export/fid.xml"
+# Latin to Cyrillic transliteration map
+LATIN_TO_CYRILLIC = {
+    'a': 'а', 'b': 'б', 'v': 'в', 'g': 'г', 'd': 'д', 'e': 'е',
+    'zh': 'ж', 'z': 'з', 'i': 'и', 'y': 'й', 'k': 'к', 'l': 'л',
+    'm': 'м', 'n': 'н', 'o': 'о', 'p': 'п', 'r': 'р', 's': 'с',
+    't': 'т', 'u': 'у', 'f': 'ф', 'kh': 'х', 'h': 'х', 'ts': 'ц',
+    'ch': 'ч', 'sh': 'ш', 'shch': 'щ', 'yu': 'ю', 'ya': 'я',
+}
+# Common brand typos/misspellings -> correct name
+TYPO_CORRECTIONS = {
+    'топаз': 'топас', 'topas': 'топас', 'topaz': 'топас',
+    'евролас': 'евролос', 'евралос': 'евролос', 'evrolos': 'евролос',
+    'биодэка': 'биодека', 'biodeka': 'биодека',
+    'юнилос': 'юнилос астра', 'unilos': 'юнилос астра',
+    'астра': 'юнилос астра',
+    'генезис': 'генезис', 'genesis': 'генезис',
+    'коловеси': 'коло веси', 'kolo vesi': 'коло веси',
+    'термит': 'термит', 'termit': 'термит',
+    'тритон': 'тритон', 'triton': 'тритон',
+    'гарда': 'garda', 'garda': 'garda',
+    'аквалос': 'аквалос', 'akvalos': 'аквалос',
+    'альтабио': 'альта био', 'alta bio': 'альта био',
+    'биотанк': 'биотанк', 'biotank': 'биотанк',
+    'росток': 'росток', 'rostok': 'росток',
+    'танк': 'танк', 'tank': 'танк',
+    'лидер': 'лидер', 'lider': 'лидер',
+    'кессон': 'кессон', 'kesson': 'кессон',
+    'оптима': 'optyma', 'optima': 'optyma',
+}
+# Priority brands — shown first when priority=true
+PRIORITY_BRANDS = [
+    'евролос', 'zorde', 'зорде', 'итал', 'колос', 'optima', 'оптима', 'optyma',
+    'тверь', 'удача', 'novo eco', 'ново эко', 'евробион',
+    'биодевайс', 'далос', 'коло веси',
+]
+def is_priority_brand(product: dict) -> bool:
+    """Check if product belongs to a priority brand."""
+    brand = product.get('params', {}).get('Бренд', '').lower()
+    name = product.get('name', '').lower()
+    category = product.get('category_name', '').lower()
+    for pb in PRIORITY_BRANDS:
+        if pb in brand or pb in name or pb in category:
+            return True
+    return False
+def transliterate_to_cyrillic(text: str) -> str:
+    """Convert Latin text to Cyrillic approximation."""
+    result = text.lower()
+    # Sort by length (longer first) to handle 'shch' before 'sh'
+    for lat, cyr in sorted(LATIN_TO_CYRILLIC.items(), key=lambda x: -len(x[0])):
+        result = result.replace(lat, cyr)
+    return result
+def fix_typos(query: str) -> str:
+    """Fix common typos and transliterate if needed."""
+    q_lower = query.lower().strip()
+    # Check direct typo match
+    for typo, correct in TYPO_CORRECTIONS.items():
+        if typo in q_lower:
+            q_lower = q_lower.replace(typo, correct)
+            return q_lower
+    # If query has Latin characters, try transliteration
+    if re.search(r'[a-zA-Z]', query):
+        return transliterate_to_cyrillic(q_lower)
+    return q_lower
+def fuzzy_match(word: str, target: str, threshold: float = 0.7) -> float:
+    """Return similarity ratio between word and target."""
+    return SequenceMatcher(None, word.lower(), target.lower()).ratio()
+def clean_text(text: str) -> str:
+    if not text:
+        return ""
+    # Remove CDATA wrapper if present
+    text = text.replace("<![CDATA[", "").replace("]]>", "")
+    # Decode html entities
+    text = html.unescape(text)
+    # Remove HTML tags
+    text = re.sub(r'<[^>]+>', ' ', text)
+    # Clean up whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+async def fetch_and_parse_xml():
+    print("Fetching XML...")
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(FEED_URL, timeout=30.0)
+            response.raise_for_status()
+            
+            root = ET.fromstring(response.content)
+            
+            categories = {}
+            for category in root.findall(".//category"):
+                cat_id = category.get("id")
+                parent_id = category.get("parentId")
+                name = category.text
+                categories[cat_id] = {
+                    "id": cat_id,
+                    "name": name,
+                    "parent_id": parent_id
                 }
-
-                if (isOpen) {
-                    setTimeout(() => input.focus(), 400);
+                
+            products = []
+            for offer in root.findall(".//offer"):
+                if offer.get("available") != "true":
+                    continue
+                    
+                product = {
+                    "id": offer.get("id"),
+                    "name": offer.findtext("name", ""),
+                    "price": float(offer.findtext("price", "0")),
+                    "url": offer.findtext("url", ""),
+                    "category_id": offer.findtext("categoryId", ""),
+                    "description": clean_text(offer.findtext("description", "")),
+                    "params": {}
                 }
-            });
-
-            // --- Welcome Message ---
-            function showWelcome() {
-                addBotMessage(
-                    'Здравствуйте! 👋 Я консультант магазина <b>Ленканал</b>. ' +
-                    'Помогу подобрать септик или автономную канализацию для вашего дома.\n\n' +
-                    'Расскажите, что вас интересует?'
-                );
-
-                const quickBtns = [
-                    'Подобрать септик',
-                    'Узнать цену',
-                    'Для дачи на 4 чел.',
-                    'Без электричества'
-                ];
-                addQuickActions(quickBtns);
-            }
-
-            // --- Send Message ---
-            function sendMessage() {
-                const text = input.value.trim();
-                if (!text || isWaiting) return;
-
-                addUserMessage(text);
-                input.value = '';
-                isWaiting = true;
-                sendBtn.disabled = true;
-
-                const typingEl = showTyping();
-
-                fetch(WEBHOOK_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        message: text,
-                        session_id: sessionId
-                    })
-                })
-                    .then(res => {
-                        if (!res.ok) throw new Error('Network error: ' + res.status);
-                        return res.text(); // Get raw text first
-                    })
-                    .then(rawText => {
-                        removeTyping(typingEl);
-                        console.log('Raw response:', rawText);
-
-                        let reply = '';
-
-                        // Try to parse as JSON
-                        try {
-                            const data = JSON.parse(rawText);
-                            reply = data.reply || data.message || data.text || data.response || '';
-                        } catch (e) {
-                            // JSON parse failed — extract text with regex
-                            const match = rawText.match(/"reply"\s*:\s*"([\s\S]+)/);
-                            if (match) {
-                                reply = match[1].replace(/"\s*\}\s*$/, '');
-                            } else {
-                                reply = rawText
-                                    .replace(/^\s*\{\s*"reply"\s*:\s*"?/, '')
-                                    .replace(/"?\s*\}\s*$/, '');
-                            }
-                        }
-
-                        // Clean up escaped characters
-                        reply = reply
-                            .replace(/\\n/g, '\n')
-                            .replace(/\\"/g, '"')
-                            .replace(/\\\\/g, '\\')
-                            .replace(/^["']|["']$/g, '');
-
-                        if (!reply || reply === '{}' || reply === 'Accepted') {
-                            reply = 'Извините, не удалось получить ответ. Попробуйте переформулировать вопрос или позвоните: <b>+7 (812) 409-96-30</b>';
-                        }
-
-                        addBotMessage(reply);
-                    })
-                    .catch(err => {
-                        removeTyping(typingEl);
-                        addBotMessage(
-                            'Извините, произошла ошибка соединения. Попробуйте позже или позвоните нам: ' +
-                            '<b>+7 (812) 409-96-30</b>'
-                        );
-                        console.error('Chat error:', err);
-                    })
-                    .finally(() => {
-                        isWaiting = false;
-                        sendBtn.disabled = false;
-                        input.focus();
-                    });
-            }
-
-            // --- Event Listeners ---
-            sendBtn.addEventListener('click', sendMessage);
-            input.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage();
-                }
-            });
-
-            // --- Message Helpers ---
-            function addUserMessage(text) {
-                const div = document.createElement('div');
-                div.className = 'chat-msg user';
-                div.innerHTML = `
-      <div class="msg-avatar">👤</div>
-      <div class="msg-bubble">${escapeHtml(text)}</div>
-    `;
-                messages.appendChild(div);
-                scrollToBottom();
-            }
-
-            function addBotMessage(text) {
-                const div = document.createElement('div');
-                div.className = 'chat-msg bot';
-                div.innerHTML = `
-      <div class="msg-avatar">💧</div>
-      <div class="msg-bubble">${formatMessage(text)}</div>
-    `;
-                messages.appendChild(div);
-                scrollToBottom();
-            }
-
-            function addQuickActions(buttons) {
-                const lastMsg = messages.lastElementChild;
-                if (!lastMsg) return;
-                const bubble = lastMsg.querySelector('.msg-bubble');
-                const actionsDiv = document.createElement('div');
-                actionsDiv.className = 'quick-actions';
-                buttons.forEach(label => {
-                    const btn = document.createElement('button');
-                    btn.className = 'quick-btn';
-                    btn.textContent = label;
-                    btn.addEventListener('click', () => {
-                        input.value = label;
-                        sendMessage();
-                        // Remove quick actions after click
-                        actionsDiv.remove();
-                    });
-                    actionsDiv.appendChild(btn);
-                });
-                bubble.appendChild(actionsDiv);
-            }
-
-            function showTyping() {
-                const div = document.createElement('div');
-                div.className = 'chat-msg bot';
-                div.id = 'typing-msg';
-                div.innerHTML = `
-      <div class="msg-avatar">💧</div>
-      <div class="msg-bubble">
-        <div class="typing-indicator">
-          <span></span><span></span><span></span>
-        </div>
-      </div>
-    `;
-                messages.appendChild(div);
-                scrollToBottom();
-                return div;
-            }
-
-            function removeTyping(el) {
-                if (el && el.parentNode) el.parentNode.removeChild(el);
-            }
-
-            function scrollToBottom() {
-                requestAnimationFrame(() => {
-                    messages.scrollTop = messages.scrollHeight;
-                });
-            }
-
-            // --- Text Formatting ---
-            function escapeHtml(text) {
-                const div = document.createElement('div');
-                div.textContent = text;
-                return div.innerHTML;
-            }
-
-            function formatMessage(text) {
-                if (!text) return '';
-                // Convert line breaks
-                let html = text.replace(/\n/g, '<br>');
-                // Convert markdown bold **text**
-                html = html.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
-                // Convert URLs to links
-                html = html.replace(
-                    /(https?:\/\/[^\s<]+)/g,
-                    '<a href="$1" target="_blank" rel="noopener">$1</a>'
-                );
-                // Convert phone numbers to tel: links
-                html = html.replace(
-                    /(\+7\s*\(\d{3}\)\s*\d{3}[\-\s]?\d{2}[\-\s]?\d{2})/g,
-                    '<a href="tel:$1">$1</a>'
-                );
-                return html;
-            }
-        })();
-    </script>
-
-</body>
-
-</html>
+                
+                # Extract oldprice if available
+                oldprice_text = offer.findtext("oldprice")
+                if oldprice_text:
+                    try:
+                        product["oldprice"] = float(oldprice_text)
+                    except ValueError:
+                        pass
+                
+                # Extract params (brand, size, etc.)
+                for param in offer.findall("param"):
+                    param_name = param.get("name")
+                    param_value = param.text
+                    if param_name and param_value:
+                        product["params"][param_name] = param_value
+                        
+                # Add category name for easier search
+                cat_id = product["category_id"]
+                if cat_id in categories:
+                    product["category_name"] = categories[cat_id]["name"]
+                    
+                products.append(product)
+                
+            CACHE["categories"] = categories
+            CACHE["products"] = products
+            CACHE["last_updated"] = asyncio.get_event_loop().time()
+            print(f"Loaded {len(categories)} categories and {len(products)} products.")
+            
+        except Exception as e:
+            print(f"Error fetching/parsing XML: {e}")
+@app.on_event("startup")
+async def startup_event():
+    # Fetch immediately on startup
+    await fetch_and_parse_xml()
+    # TODO: Add background task for periodic updates if needed
+@app.get("/categories")
+async def get_categories():
+    """Returns all categories."""
+    return {"categories": list(CACHE["categories"].values())}
+def _score_product(p, q_words, q_original):
+    """Score a single product against query words. Returns score or 0."""
+    score = 0
+    name_lower = p["name"].lower()
+    brand = p["params"].get("Бренд", "").lower()
+    category = p.get("category_name", "").lower()
+    all_params = " ".join(p["params"].values()).lower()
+    
+    for word in q_words:
+        if word in name_lower:
+            score += 10
+        elif word in brand:
+            score += 8
+        elif word in category:
+            score += 5
+        elif word in all_params:
+            score += 3
+        elif word in p["description"].lower():
+            score += 1
+        else:
+            # Fuzzy match against brand name
+            if brand and fuzzy_match(word, brand) >= 0.75:
+                score += 6
+            # Fuzzy match against words in product name
+            elif any(fuzzy_match(word, nw) >= 0.75 for nw in name_lower.split() if len(nw) > 2):
+                score += 4
+    
+    if score == 0:
+        return 0
+    
+    # Bonus for exact full query match in name
+    if q_original and q_original.lower() in name_lower:
+        score += 20
+    
+    return score
+def _do_search(q=None, category_id=None, min_price=None, max_price=None, users=None, limit=10, priority=False):
+    """Core search logic with fuzzy matching and typo correction."""
+    import re
+    original_query = q
+    
+    # Step 0: Extract intent from text query
+    inferred_max_price = max_price
+    inferred_users = users
+    if q and not max_price:
+        m_price = re.search(r'(?:до|бюджет|цена\s*до|в\s*пределах)\s*(\d{2,3}(?:\s*\d{3})*)', q, flags=re.IGNORECASE)
+        if m_price:
+            inferred_max_price = float(m_price.group(1).replace(" ", ""))
+        else:
+            m_price_tr = re.search(r'(?:до|бюджет|цена\s*до|в\s*пределах)\s*(\d{2,3})\s*(?:т\.?р\.?|тыс|т\s*р)', q, flags=re.IGNORECASE)
+            if m_price_tr:
+                inferred_max_price = float(m_price_tr.group(1)) * 1000
+    
+    if q and not users:
+        m_users = re.search(r'(?:на|для|до)?\s*(\d+)\s*(?:чел|человек|персон|проживаю)', q, flags=re.IGNORECASE)
+        if m_users:
+            inferred_users = m_users.group(1)
+            
+    # Step 1: Fix typos and transliterate
+    if q:
+        q_fixed = fix_typos(q)
+    else:
+        q_fixed = q
+    
+    # Step 2: Try search with corrected query
+    scored_results = []
+    q_words = [w.lower() for w in q_fixed.split()] if q_fixed else []
+    
+    for p in CACHE["products"]:
+        if category_id and p["category_id"] != category_id:
+            continue
+        if min_price is not None and p["price"] < min_price:
+            continue
+        if max_price is not None and p["price"] > max_price:
+            continue
+        if users and p["params"].get("Количество пользователей", "") != users:
+            continue
+        
+        score = 0
+        if q_words:
+            # text match adds 5 to 50 score
+            score += _score_product(p, q_words, q_fixed)
+            
+        # Apply intent boosts
+        if inferred_users:
+            p_users = str(p.get("params", {}).get("Количество пользователей", ""))
+            
+            target = 0
+            try:
+                target = int(inferred_users)
+            except ValueError:
+                pass
+                
+            if target > 0 and p_users:
+                if "-" in p_users:
+                    try:
+                        p1, p2 = map(int, p_users.split("-"))
+                        if p1 <= target <= p2:
+                            score += 50  # target falls within range
+                        elif target < p1 and p1 - target <= 3:
+                            score += 20  # range starts slightly above target
+                        # if target > p2 — too small, no boost
+                    except Exception:
+                        pass
+                elif p_users.isdigit():
+                    p_u = int(p_users)
+                    if p_u == target:
+                        score += 50  # exact match
+                    elif p_u > target and p_u <= target + 3:
+                        score += 30  # slightly larger, still great
+                    elif p_u > target + 3:
+                        score += 10  # much larger, but usable
+                    # if p_u < target — too small, no boost
+        
+        if inferred_max_price:
+            if p["price"] <= inferred_max_price:
+                score += 40
+            elif p["price"] <= inferred_max_price * 1.15: # allow up to 15% over
+                score += 20
+            
+        if score > 0 or not q_words:
+            scored_results.append((score, p))
+    
+    # Step 3: If no results and query was corrected, note that
+    corrected = q_fixed != (q.lower().strip() if q else q)
+    
+    scored_results.sort(key=lambda x: (-x[0], x[1]["price"]))
+    
+    # Filter by priority brands if requested
+    if priority:
+        scored_results = [(s, p) for s, p in scored_results if is_priority_brand(p)]
+    
+    results = [item[1] for item in scored_results[:limit]]
+    
+    response = {"results": results, "total_found": len(results), "query": original_query}
+    if corrected and results:
+        response["corrected_query"] = q_fixed
+        response["note"] = f"Исправлено: '{original_query}' → '{q_fixed}'"
+    
+    # Auto-suggest priority brand alternatives if results contain non-priority brands
+    if results and not priority:
+        has_non_priority = any(not is_priority_brand(p) for p in results)
+        if has_non_priority:
+            seen_ids = {p["id"] for p in results}
+            alternatives = []
+            
+            # Since scored_results is already sorted by intent score and price,
+            # we simply pick the top 3 priority brands from it!
+            for score, p in scored_results:
+                if p["id"] in seen_ids:
+                    continue
+                if is_priority_brand(p):
+                    alternatives.append(p)
+                    if len(alternatives) == 3:
+                        break
+                        
+            if alternatives:
+                response["priority_alternatives"] = alternatives
+                response["alternatives_note"] = "Рекомендуемые аналоги с высоким качеством очистки и надёжностью"
+    
+    return response
+@app.get("/search")
+async def search_products(
+    q: Optional[str] = Query(None),
+    category_id: Optional[str] = Query(None),
+    min_price: Optional[float] = Query(None),
+    max_price: Optional[float] = Query(None),
+    users: Optional[str] = Query(None),
+    limit: int = Query(10),
+    priority: bool = Query(False)
+):
+    return _do_search(q=q, category_id=category_id, min_price=min_price,
+                      max_price=max_price, users=users, limit=limit, priority=priority)
+@app.post("/search")
+async def search_products_post(body: SearchRequest):
+    return _do_search(q=body.q, category_id=body.category_id,
+                      min_price=body.min_price, max_price=body.max_price,
+                      users=body.users, limit=body.limit)
+@app.get("/find/{query}")
+async def find_products(query: str, limit: int = 10, priority: bool = False):
+    """Search by query in URL path. Example: /find/Топас 5?priority=true"""
+    return _do_search(q=query, limit=limit, priority=priority)
+@app.post("/")
+async def catch_all_post(request: Request):
+    """Catch-all POST for AI Agent flexibility (Legacy)."""
+    try:
+        data = await request.json()
+        q = data.get("q") or data.get("query") or data.get("search") or data.get("queryParameters", {}).get("q")
+        limit = data.get("limit", 10)
+        if not q:
+            for v in data.values():
+                if isinstance(v, str) and len(v) > 1:
+                    q = v
+                    break
+                elif isinstance(v, dict):
+                    for vv in v.values():
+                        if isinstance(vv, str) and len(vv) > 1:
+                            q = vv
+                            break
+        return _do_search(q=q, limit=limit)
+    except Exception as e:
+        return {"error": str(e), "results": [], "total_found": 0}
+async def _extract_query_from_agent_post(request: Request) -> tuple[Optional[str], int]:
+    """Helper to extract query and limit from various Make AI Agent JSON formats.
+    
+    Make.com AI Agent wraps payloads in special keys depending on Body input method:
+    - JSON string  -> {"jsonStringBodyContent": "{\"query\": \"...\"}"}
+    - urlencoded   -> {"urlEncodedBodyContent": [{"name":"query","value":"..."}]}
+    - Raw/direct   -> {"q": "..."} or {"query": "..."}
+    """
+    import json as json_module
+    try:
+        # First try to parse as JSON
+        data = await request.json()
+        
+        # 0. Make.com "JSON string" wrapper — the agent sends a JSON string inside a string
+        if "jsonStringBodyContent" in data:
+            try:
+                inner = json_module.loads(data["jsonStringBodyContent"])
+                q = inner.get("q") or inner.get("query") or inner.get("search")
+                limit = inner.get("limit", 10)
+                if not q:
+                    # Grab first string value > 1 char
+                    for v in inner.values():
+                        if isinstance(v, str) and len(v) > 1:
+                            q = v
+                            break
+                if q:
+                    return q, limit
+            except (json_module.JSONDecodeError, TypeError, AttributeError):
+                # If inner content is not valid JSON, treat as raw query string
+                raw = str(data["jsonStringBodyContent"]).strip()
+                if len(raw) > 1:
+                    return raw, 10
+        
+        # 1. Make.com urlencoded array format
+        if "urlEncodedBodyContent" in data and isinstance(data["urlEncodedBodyContent"], list):
+            q = None
+            limit = 10
+            for item in data["urlEncodedBodyContent"]:
+                val = item.get("value", "")
+                name = str(item.get("name", "")).lower()
+                
+                if name == "limit":
+                    try:
+                        limit = int(val)
+                    except ValueError:
+                        pass
+                elif isinstance(val, str) and len(val) > 1:
+                    # Just grab the first string that looks like a query
+                    q = val
+                    
+            if q:
+                return q, limit
+        # 2. Standard flat JSON formats
+        q = data.get("q") or data.get("query") or data.get("search") or data.get("queryParameters", {}).get("q")
+        limit = data.get("limit", 10)
+        
+        if not q:
+            # Fallback for finding the first string value looking like a query
+            for v in data.values():
+                if isinstance(v, str) and len(v) > 1:
+                    q = v
+                    break
+                elif isinstance(v, dict):
+                    for vv in v.values():
+                        if isinstance(vv, str) and len(vv) > 1:
+                            q = vv
+                            break
+        return q, limit
+    except Exception:
+        # 3. If not JSON, try reading as raw HTML form data
+        try:
+            form_data = await request.form()
+            q = None
+            limit = 10
+            # Iterate through form fields, grab first valid string
+            for key, val in form_data.items():
+                if key.lower() == "limit":
+                    try:
+                        limit = int(val)
+                    except ValueError:
+                        pass
+                elif isinstance(val, str) and len(val) > 1 and not q:
+                    q = val
+            return q, limit
+        except Exception:
+            return None, 10
+@app.post("/api/agent/search_priority")
+async def agent_search_priority(request: Request):
+    """Tool 1: Explicitly search ONLY priority brands."""
+    q, limit = await _extract_query_from_agent_post(request)
+    if not q:
+        return {"error": "No query provided", "results": [], "total_found": 0}
+    return _do_search(q=q, limit=limit, priority=True)
+@app.post("/api/agent/search_all")
+async def agent_search_all(request: Request):
+    """Tool 2: Search ALL brands (auto-includes priority alternatives)."""
+    q, limit = await _extract_query_from_agent_post(request)
+    if not q:
+        return {"error": "No query provided", "results": [], "total_found": 0}
+    return _do_search(q=q, limit=limit, priority=False)
+@app.get("/product/{product_id}")
+async def get_product(product_id: str):
+    """Get a specific product by ID."""
+    for p in CACHE["products"]:
+        if p["id"] == product_id:
+            return p
+    raise HTTPException(status_code=404, detail="Product not found")
+@app.get("/widget", response_class=HTMLResponse)
+async def widget_page():
+    """Serve the chat widget demo page."""
+    widget_path = os.path.join(os.path.dirname(__file__), "chat-widget.html")
+    try:
+        with open(widget_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Widget file not found")
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
