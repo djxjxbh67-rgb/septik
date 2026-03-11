@@ -72,6 +72,72 @@ TYPO_CORRECTIONS = {
     'форза': 'g forza', 'forza': 'g forza', 'g forza': 'g forza',
     'акс': 'akc st', 'акс ст': 'akc st', 'aks': 'akc st', 'akc': 'akc st',
 }
+# Brand name -> catalog page URL on lenkanal.ru
+BRAND_CATALOG_URLS = {
+    'akc st': 'https://lenkanal.ru/catalog/akc-st/',
+    'акс st': 'https://lenkanal.ru/catalog/akc-st/',
+    'flipper': 'https://lenkanal.ru/catalog/flipper/',
+    'g forza': 'https://lenkanal.ru/catalog/g-forza/',
+    'garda': 'https://lenkanal.ru/catalog/garda/',
+    'genesis': 'https://lenkanal.ru/catalog/genezis/',
+    'novo eko': 'https://lenkanal.ru/catalog/novo-eko/',
+    'novo eco': 'https://lenkanal.ru/catalog/novo-eko/',
+    'optima': 'https://lenkanal.ru/catalog/optima/',
+    'sani': 'https://lenkanal.ru/catalog/sani/',
+    'vodanoff': 'https://lenkanal.ru/catalog/vodanoff/',
+    'vortex': 'https://lenkanal.ru/catalog/vortex/',
+    'zorde': 'https://lenkanal.ru/catalog/zorde/',
+    'аквалос': 'https://lenkanal.ru/catalog/akvalos/',
+    'альта био': 'https://lenkanal.ru/catalog/alta-bio/',
+    'аэробокс': 'https://lenkanal.ru/catalog/aeroboks/',
+    'барс': 'https://lenkanal.ru/catalog/bars/',
+    'био-с': 'https://lenkanal.ru/catalog/bio-s/',
+    'биодевайс': 'https://lenkanal.ru/catalog/biodevays/',
+    'биодека': 'https://lenkanal.ru/catalog/biodeka/',
+    'биозон': 'https://lenkanal.ru/catalog/biozon/',
+    'биолос': 'https://lenkanal.ru/catalog/biolos/',
+    'биосток': 'https://lenkanal.ru/catalog/biostok/',
+    'биотанк': 'https://lenkanal.ru/catalog/biotank/',
+    'волгарь': 'https://lenkanal.ru/catalog/volgar/',
+    'геосептик': 'https://lenkanal.ru/catalog/geoseptik/',
+    'гринлос': 'https://lenkanal.ru/catalog/grinlos/',
+    'далос': 'https://lenkanal.ru/catalog/dalos/',
+    'диамант': 'https://lenkanal.ru/catalog/diamant/',
+    'дкс': 'https://lenkanal.ru/catalog/dks/',
+    'дочиста': 'https://lenkanal.ru/catalog/dochista/',
+    'евробион': 'https://lenkanal.ru/catalog/evrobion/',
+    'евродиамант': 'https://lenkanal.ru/catalog/evrodiamant/',
+    'евролос': 'https://lenkanal.ru/catalog/evrolos/',
+    'евротанк': 'https://lenkanal.ru/catalog/evrotank/',
+    'итал': 'https://lenkanal.ru/catalog/ital/',
+    'кибез': 'https://lenkanal.ru/catalog/kibez/',
+    'кит': 'https://lenkanal.ru/catalog/kit/',
+    'коло веси': 'https://lenkanal.ru/catalog/kolo-vesi/',
+    'колос': 'https://lenkanal.ru/catalog/kolos/',
+    'кристалл': 'https://lenkanal.ru/catalog/kristall/',
+    'крот': 'https://lenkanal.ru/catalog/krot/',
+    'лидер': 'https://lenkanal.ru/catalog/lider/',
+    'малахит': 'https://lenkanal.ru/catalog/malakhit/',
+    'оникс': 'https://lenkanal.ru/catalog/oniks/',
+    'пегас': 'https://lenkanal.ru/catalog/pegas/',
+    'пеликан': 'https://lenkanal.ru/catalog/pelikan/',
+    'практик': 'https://lenkanal.ru/catalog/praktik/',
+    'росток': 'https://lenkanal.ru/catalog/rostok/',
+    'септобак': 'https://lenkanal.ru/catalog/septobak/',
+    'спарта': 'https://lenkanal.ru/catalog/sparta/',
+    'танк': 'https://lenkanal.ru/catalog/tank/',
+    'тверь': 'https://lenkanal.ru/catalog/tver/',
+    'термит': 'https://lenkanal.ru/catalog/termit/',
+    'терра': 'https://lenkanal.ru/catalog/terra/',
+    'топас': 'https://lenkanal.ru/catalog/topas/',
+    'тополь': 'https://lenkanal.ru/catalog/topol/',
+    'тритон': 'https://lenkanal.ru/catalog/triton/',
+    'удача': 'https://lenkanal.ru/catalog/udacha/',
+    'эко-гранд': 'https://lenkanal.ru/catalog/eko-grand/',
+    'эко-л': 'https://lenkanal.ru/catalog/eko-l/',
+    'эргобокс': 'https://lenkanal.ru/catalog/ergoboks/',
+    'юнилос астра': 'https://lenkanal.ru/catalog/yunilos-astra/',
+}
 # Priority brands — shown first when priority=true
 PRIORITY_BRANDS = [
     'евролос', 'zorde', 'зорде', 'итал', 'колос', 'optima', 'оптима',
@@ -365,6 +431,19 @@ def _do_search(q=None, category_id=None, min_price=None, max_price=None, users=N
             if alternatives:
                 response["priority_alternatives"] = alternatives
                 response["alternatives_note"] = "Рекомендуемые аналоги с высоким качеством очистки и надёжностью"
+    
+    # Add brand catalog URLs for brands found in results
+    if results:
+        brand_urls = {}
+        for p in results:
+            brand = p.get('params', {}).get('Бренд', '').lower()
+            cat = p.get('category_name', '').lower()
+            # Try brand param first, then category name
+            for key in [brand, cat]:
+                if key and key in BRAND_CATALOG_URLS and key not in brand_urls:
+                    brand_urls[p.get('params', {}).get('Бренд', '') or p.get('category_name', '')] = BRAND_CATALOG_URLS[key]
+        if brand_urls:
+            response["brand_urls"] = brand_urls
     
     return response
 @app.get("/search")
