@@ -11,9 +11,7 @@ import re
 import html
 import json
 from difflib import SequenceMatcher
-
 app = FastAPI(title="Septic Store API", description="Microservice for searching products in XML feed")
-
 # Allow CORS from any origin (for Make.com and widget)
 app.add_middleware(
     CORSMiddleware,
@@ -21,7 +19,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 class SearchRequest(BaseModel):
     q: Optional[str] = None
     category_id: Optional[str] = None
@@ -29,16 +26,13 @@ class SearchRequest(BaseModel):
     max_price: Optional[float] = None
     users: Optional[str] = None
     limit: int = 10
-
 # Global cache
 CACHE = {
     "categories": {}, # id -> {"id": str, "name": str, "parent_id": str}
     "products": [],   # list of product dicts
     "last_updated": None
 }
-
 FEED_URL = "https://lenkanal.ru/bitrix/catalog_export/fid.xml"
-
 # Latin to Cyrillic transliteration map
 LATIN_TO_CYRILLIC = {
     'a': 'а', 'b': 'б', 'v': 'в', 'g': 'г', 'd': 'д', 'e': 'е',
@@ -47,7 +41,6 @@ LATIN_TO_CYRILLIC = {
     't': 'т', 'u': 'у', 'f': 'ф', 'kh': 'х', 'h': 'х', 'ts': 'ц',
     'ch': 'ч', 'sh': 'ш', 'shch': 'щ', 'yu': 'ю', 'ya': 'я',
 }
-
 # Common brand typos/misspellings -> correct name
 TYPO_CORRECTIONS = {
     'топаз': 'топас', 'topas': 'топас', 'topaz': 'топас',
@@ -55,11 +48,9 @@ TYPO_CORRECTIONS = {
     'биодэка': 'биодека', 'biodeka': 'биодека',
     'юнилос': 'юнилос астра', 'unilos': 'юнилос астра',
     'астра': 'юнилос астра',
-    'генезис': 'генезис', 'genesis': 'генезис',
     'коловеси': 'коло веси', 'kolo vesi': 'коло веси',
     'термит': 'термит', 'termit': 'термит',
     'тритон': 'тритон', 'triton': 'тритон',
-    'гарда': 'garda', 'garda': 'garda',
     'аквалос': 'аквалос', 'akvalos': 'аквалос',
     'альтабио': 'альта био', 'alta bio': 'альта био',
     'биотанк': 'биотанк', 'biotank': 'биотанк',
@@ -67,15 +58,25 @@ TYPO_CORRECTIONS = {
     'танк': 'танк', 'tank': 'танк',
     'лидер': 'лидер', 'lider': 'лидер',
     'кессон': 'кессон', 'kesson': 'кессон',
+    # LATIN BRANDS IN FEED (Cyrillic -> Latin):
+    'генезис': 'genesis', 'genesis': 'genesis',
+    'гарда': 'garda', 'garda': 'garda',
+    'оптима': 'optima', 'обтима': 'optima', 'optima': 'optima',
+    'оптиму': 'optima', 'оптимы': 'optima', 'оптиме': 'optima', 'оптимой': 'optima', 'оптим': 'optima',
+    'зорде': 'zorde', 'zorde': 'zorde',
+    'флиппер': 'flipper', 'флипер': 'flipper', 'flipper': 'flipper',
+    'ново эко': 'novo eco', 'новоэко': 'novo eco', 'novo eco': 'novo eco',
+    'сани': 'sani', 'sani': 'sani', 'саней': 'sani', 'саням': 'sani', 'санями': 'sani', 'санях': 'sani',
+    'вортекс': 'vortex', 'vortex': 'vortex',
+    'воданов': 'vodanoff', 'воданофф': 'vodanoff', 'vodanoff': 'vodanoff',
+    'форза': 'g forza', 'forza': 'g forza', 'g forza': 'g forza',
 }
-
 # Priority brands — shown first when priority=true
 PRIORITY_BRANDS = [
     'евролос', 'zorde', 'зорде', 'итал', 'колос', 'optima', 'оптима',
     'тверь', 'удача', 'novo eco', 'ново эко', 'евробион',
     'биодевайс', 'далос', 'коло веси',
 ]
-
 def is_priority_brand(product: dict) -> bool:
     """Check if product belongs to a priority brand."""
     brand = product.get('params', {}).get('Бренд', '').lower()
@@ -85,7 +86,6 @@ def is_priority_brand(product: dict) -> bool:
         if pb in brand or pb in name or pb in category:
             return True
     return False
-
 def transliterate_to_cyrillic(text: str) -> str:
     """Convert Latin text to Cyrillic approximation."""
     result = text.lower()
@@ -93,24 +93,34 @@ def transliterate_to_cyrillic(text: str) -> str:
     for lat, cyr in sorted(LATIN_TO_CYRILLIC.items(), key=lambda x: -len(x[0])):
         result = result.replace(lat, cyr)
     return result
-
 def fix_typos(query: str) -> str:
     """Fix common typos and transliterate if needed."""
+    if not query:
+        return ""
+        
     q_lower = query.lower().strip()
-    # Check direct typo match
-    for typo, correct in TYPO_CORRECTIONS.items():
-        if typo in q_lower:
-            q_lower = q_lower.replace(typo, correct)
-            return q_lower
-    # If query has Latin characters, try transliteration
-    if re.search(r'[a-zA-Z]', query):
-        return transliterate_to_cyrillic(q_lower)
+    
+    # 1. Translate backwards-typed english chars into cyrillic if someone forgot to switch keyboard layout
+    # BUT only for specific accidental strokes. Actually, it's safer to just rely on TYPO_CORRECTIONS
+    # Transliterating any Latin char to Cyrillic destroys legitimate English brand names like 'Sani', 'Optima'.
+    # We remove the global LATIN_TO_CYRILLIC auto-convert entirely to prevent it from mutating valid brands.
+    
+    # 2. Replace all occurrences of known typos using regex \b (word boundaries) so we don't break 'оптимальный'
+    import re
+    # We sort by length descending to replace longer phrases like 'ново эко' before 'эко'
+    sorted_typos = sorted(TYPO_CORRECTIONS.keys(), key=len, reverse=True)
+    
+    for typo in sorted_typos:
+        correct = TYPO_CORRECTIONS[typo]
+        # using \b for cyrillic and latin
+        # Note: in Python, \b works with unicode letters if re.UNICODE is set, which is default in Py3
+        pattern = r'\b' + re.escape(typo) + r'\b'
+        q_lower = re.sub(pattern, correct, q_lower)
+        
     return q_lower
-
 def fuzzy_match(word: str, target: str, threshold: float = 0.7) -> float:
     """Return similarity ratio between word and target."""
     return SequenceMatcher(None, word.lower(), target.lower()).ratio()
-
 def clean_text(text: str) -> str:
     if not text:
         return ""
@@ -123,7 +133,6 @@ def clean_text(text: str) -> str:
     # Clean up whitespace
     text = re.sub(r'\s+', ' ', text).strip()
     return text
-
 async def fetch_and_parse_xml():
     print("Fetching XML...")
     async with httpx.AsyncClient() as client:
@@ -188,18 +197,15 @@ async def fetch_and_parse_xml():
             
         except Exception as e:
             print(f"Error fetching/parsing XML: {e}")
-
 @app.on_event("startup")
 async def startup_event():
     # Fetch immediately on startup
     await fetch_and_parse_xml()
     # TODO: Add background task for periodic updates if needed
-
 @app.get("/categories")
 async def get_categories():
     """Returns all categories."""
     return {"categories": list(CACHE["categories"].values())}
-
 def _score_product(p, q_words, q_original):
     """Score a single product against query words. Returns score or 0."""
     score = 0
@@ -235,7 +241,6 @@ def _score_product(p, q_words, q_original):
         score += 20
     
     return score
-
 def _do_search(q=None, category_id=None, min_price=None, max_price=None, users=None, limit=10, priority=False):
     """Core search logic with fuzzy matching and typo correction."""
     import re
@@ -343,34 +348,24 @@ def _do_search(q=None, category_id=None, min_price=None, max_price=None, users=N
     if results and not priority:
         has_non_priority = any(not is_priority_brand(p) for p in results)
         if has_non_priority:
-            # Collect user counts from found products
-            user_counts = set()
-            for p in results:
-                uc = p.get("params", {}).get("Количество пользователей", "")
-                if uc:
-                    user_counts.add(uc)
-            
-            # Find priority brand alternatives with matching user count
-            alternatives = []
             seen_ids = {p["id"] for p in results}
-            for p in CACHE["products"]:
+            alternatives = []
+            
+            # Since scored_results is already sorted by intent score and price,
+            # we simply pick the top 3 priority brands from it!
+            for score, p in scored_results:
                 if p["id"] in seen_ids:
                     continue
-                if not is_priority_brand(p):
-                    continue
-                p_users = p.get("params", {}).get("Количество пользователей", "")
-                if p_users in user_counts:
+                if is_priority_brand(p):
                     alternatives.append(p)
-                    seen_ids.add(p["id"])
-            
-            # Sort by price and take top 3
-            alternatives.sort(key=lambda x: x["price"])
+                    if len(alternatives) == 3:
+                        break
+                        
             if alternatives:
-                response["priority_alternatives"] = alternatives[:3]
+                response["priority_alternatives"] = alternatives
                 response["alternatives_note"] = "Рекомендуемые аналоги с высоким качеством очистки и надёжностью"
     
     return response
-
 @app.get("/search")
 async def search_products(
     q: Optional[str] = Query(None),
@@ -383,18 +378,15 @@ async def search_products(
 ):
     return _do_search(q=q, category_id=category_id, min_price=min_price,
                       max_price=max_price, users=users, limit=limit, priority=priority)
-
 @app.post("/search")
 async def search_products_post(body: SearchRequest):
     return _do_search(q=body.q, category_id=body.category_id,
                       min_price=body.min_price, max_price=body.max_price,
                       users=body.users, limit=body.limit)
-
 @app.get("/find/{query}")
 async def find_products(query: str, limit: int = 10, priority: bool = False):
     """Search by query in URL path. Example: /find/Топас 5?priority=true"""
     return _do_search(q=query, limit=limit, priority=priority)
-
 @app.post("/")
 async def catch_all_post(request: Request):
     """Catch-all POST for AI Agent flexibility (Legacy)."""
@@ -415,7 +407,6 @@ async def catch_all_post(request: Request):
         return _do_search(q=q, limit=limit)
     except Exception as e:
         return {"error": str(e), "results": [], "total_found": 0}
-
 async def _extract_query_from_agent_post(request: Request) -> tuple[Optional[str], int]:
     """Helper to extract query and limit from various Make AI Agent JSON formats.
     
@@ -468,7 +459,6 @@ async def _extract_query_from_agent_post(request: Request) -> tuple[Optional[str
                     
             if q:
                 return q, limit
-
         # 2. Standard flat JSON formats
         q = data.get("q") or data.get("query") or data.get("search") or data.get("queryParameters", {}).get("q")
         limit = data.get("limit", 10)
@@ -503,7 +493,6 @@ async def _extract_query_from_agent_post(request: Request) -> tuple[Optional[str
             return q, limit
         except Exception:
             return None, 10
-
 @app.post("/api/agent/search_priority")
 async def agent_search_priority(request: Request):
     """Tool 1: Explicitly search ONLY priority brands."""
@@ -511,7 +500,6 @@ async def agent_search_priority(request: Request):
     if not q:
         return {"error": "No query provided", "results": [], "total_found": 0}
     return _do_search(q=q, limit=limit, priority=True)
-
 @app.post("/api/agent/search_all")
 async def agent_search_all(request: Request):
     """Tool 2: Search ALL brands (auto-includes priority alternatives)."""
@@ -519,7 +507,6 @@ async def agent_search_all(request: Request):
     if not q:
         return {"error": "No query provided", "results": [], "total_found": 0}
     return _do_search(q=q, limit=limit, priority=False)
-
 @app.get("/product/{product_id}")
 async def get_product(product_id: str):
     """Get a specific product by ID."""
@@ -527,7 +514,6 @@ async def get_product(product_id: str):
         if p["id"] == product_id:
             return p
     raise HTTPException(status_code=404, detail="Product not found")
-
 @app.get("/widget", response_class=HTMLResponse)
 async def widget_page():
     """Serve the chat widget demo page."""
@@ -537,7 +523,6 @@ async def widget_page():
             return HTMLResponse(content=f.read())
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Widget file not found")
-
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
